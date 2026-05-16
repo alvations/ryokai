@@ -73,6 +73,21 @@ Skip SRL entirely and score by word alignment + embedding similarity. Four align
 | `"hungarian"` | XLM-RoBERTa contextual | scipy 1-to-1 Hungarian | Sultan et al. (2014) style: contextual vectors + exact-match prior + cosine threshold. |
 | `"argmax"`    | XLM-RoBERTa contextual | bidirectional argmax intersection | SimAlign Inter: each src picks best tgt; keep only mutual best. Allows many-to-many. |
 | `"itermax"`   | XLM-RoBERTa contextual | argmax intersection + iterative growth | SimAlign IterMax — **recommended quality**. Adds back unaligned words above the threshold. |
+| `"mai"`       | XLM-RoBERTa contextual | union of `hungarian` ∪ `argmax` ∪ `itermax` | SimAlign `mai` combinator — highest recall, useful as an upper-bound or for sensitivity analysis. |
+
+For a no-GPU / no-forward-pass static backend (`fastText`-style):
+
+```python
+from pymeant import MEANT, StaticEmbeddingSimBackend
+from pymeant.scorer import score_nosrl
+
+# uses only XLM-R's input embedding layer — no transformer forward pass
+score_nosrl(ref, hyp, aligner="itermax",
+            sim_backend=StaticEmbeddingSimBackend("xlm-r-base"))
+
+# or actual fastText vectors via gensim (optional install)
+StaticEmbeddingSimBackend(fasttext_path="cc.en.300.vec")
+```
 
 ```python
 # Fast — no extra model download
@@ -154,7 +169,38 @@ be = ContextualTokenSimBackend("xlm-r-base", layer=8)
 be = ContextualTokenSimBackend("qwen3-0.6b", max_distortion=0.3)
 ```
 
-These plug into any of the `aligner="hungarian"/"argmax"/"itermax"` modes via the backend you pass in.
+These plug into any of the `aligner="hungarian"/"argmax"/"itermax"/"mai"` modes via the backend you pass in.
+
+## Evaluating the aligners themselves (AER)
+
+For benchmarking pymeant's aligners against a gold word-alignment dataset (WPT, Hansards, Europarl, etc.), `pymeant.eval` exposes the standard Och & Ney (2003) AER metric and convenience helpers:
+
+```python
+from pymeant import ContextualTokenSimBackend
+from pymeant.eval import aer, evaluate_aligner
+
+# Single-pair AER
+predicted = [(0, 0, 0.9), (1, 1, 0.85)]   # (i, j, similarity) tuples are OK
+sure = {(0, 0), (1, 1)}
+print(aer(predicted, sure))                # 0.0 — perfect
+
+# Sweep an aligner over a corpus and report aggregate AER / P / R / F1
+backend = ContextualTokenSimBackend("xlm-r-base", layer=8)
+res = evaluate_aligner(
+    backend,
+    examples=[
+        ("the cat sat", "le chat s'est assis",
+         {(0, 0), (1, 1), (2, 3)},      # sure
+         None),                          # possible (None ⇒ same as sure)
+        ...,
+    ],
+    method="itermax",
+    threshold=0.5,
+)
+print(res)   # {'n': 100, 'aer': 0.18, 'precision': 0.84, 'recall': 0.79, 'f1': 0.81}
+```
+
+The metric helpers (`aer`, `precision`, `recall`, `f1`) all accept either 2-tuple `(i, j)` or 3-tuple `(i, j, similarity)` alignment pairs, so output from `ContextualTokenSimBackend.align()` / `StaticEmbeddingSimBackend.align()` plugs in directly.
 
 ### Reference-free (XMEANT / YiSi-2 style)
 

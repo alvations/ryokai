@@ -22,6 +22,7 @@ from .graph import Argument, Frame, SRLGraph
 from .labelconfig import LabelConfig
 from .scorer import DEFAULT_WEIGHTS, MEANTScore, score_nosrl, score_pair
 from .sim.embeddings import EmbeddingSimBackend
+from .sim import ContextualTokenSimBackend, StaticEmbeddingSimBackend
 from .srl import HFPOSHeuristicSRLBackend, HFTokenClassifierSRLBackend, SRLBackend
 
 __version__ = "0.1.0"
@@ -37,6 +38,8 @@ __all__ = [
     "HFPOSHeuristicSRLBackend",
     "HFTokenClassifierSRLBackend",
     "EmbeddingSimBackend",
+    "ContextualTokenSimBackend",
+    "StaticEmbeddingSimBackend",
     "DEFAULT_WEIGHTS",
     "SUPPORTED_LANGS",
     "score_pair",

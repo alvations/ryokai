@@ -236,7 +236,7 @@ def score_nosrl(
     """
     if aggregation not in ("f1", "harmonic"):
         raise ValueError(f"aggregation must be 'f1' or 'harmonic', got {aggregation!r}")
-    contextual_methods = {"hungarian", "argmax", "itermax"}
+    contextual_methods = {"hungarian", "argmax", "itermax", "mai"}
     if aligner not in ({"sentence"} | contextual_methods):
         raise ValueError(
             f"aligner must be 'sentence' or one of {sorted(contextual_methods)}, "

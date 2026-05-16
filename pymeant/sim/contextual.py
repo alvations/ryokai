@@ -173,7 +173,8 @@ class ContextualTokenSimBackend:
         Returns (pairs, ref_words, hyp_words) where pairs is
         [(ref_idx, hyp_idx, similarity), ...] with similarity >= threshold.
         """
-        if method not in ("hungarian", "argmax", "itermax"):
+        from .static import _dispatch_match
+        if method not in ("hungarian", "argmax", "itermax", "mai"):
             raise ValueError(f"unknown align method {method!r}")
 
         ref_words, ref_vecs = _embed_words(ref, self.model_id, self.layer)
@@ -192,26 +193,7 @@ class ContextualTokenSimBackend:
                     if rw == hw and rw:
                         sim[i, j] = 1.0
 
-        if method == "hungarian":
-            from scipy.optimize import linear_sum_assignment
-            rows, cols = linear_sum_assignment(-sim)
-            pairs = [
-                (int(i), int(j), float(sim[i, j]))
-                for i, j in zip(rows.tolist(), cols.tolist())
-                if sim[i, j] >= threshold
-            ]
-        elif method == "argmax":
-            # SimAlign Inter (ArgMax): pair (i,j) iff j = argmax_j' sim[i,j']
-            # AND i = argmax_i' sim[i',j]. Allows many-to-many only when both
-            # directions vote it through.
-            fwd = sim.argmax(axis=1)        # for each ref i, best hyp
-            rev = sim.argmax(axis=0)        # for each hyp j, best ref
-            pairs = []
-            for i, j in enumerate(fwd.tolist()):
-                if rev[j] == i and sim[i, j] >= threshold:
-                    pairs.append((i, int(j), float(sim[i, j])))
-        else:  # itermax
-            pairs = _itermax(sim, threshold=threshold)
+        pairs = _dispatch_match(sim, method, threshold)
 
         # SimAlign-style distortion filter: optionally drop alignments that
         # are very far apart in normalised position.
