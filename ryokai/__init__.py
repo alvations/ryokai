@@ -1,78 +1,88 @@
-"""ryokai — Python port of MEANT 2.0.
+"""ryokai — 了解.
+
+Unified semantic machine-translation evaluation, combining the strengths
+of MEANT 2.0, XMEANT, YiSi-1/2, WOLVESAAR, and SimAlign behind one clean
+Python API on top of modern multilingual embeddings.
 
 Quickstart
 ----------
->>> from ryokai import MEANT
->>> meant = MEANT(lang="en")
->>> meant.score(
+>>> from ryokai import Ryokai
+>>> r = Ryokai(lang="en")
+>>> r.score(
 ...     reference="The cat sat on the mat.",
 ...     hypothesis="A cat is sitting on the mat.",
 ... )
-MEANTScore(precision=..., recall=..., f1=..., ...)
+Score(precision=..., recall=..., f1=..., ...)
 
-Variants supported (see README):
-- standard MEANT (this default)
-- YiSi-1 style no-SRL mode: `MEANT(lang=..., use_srl=False)`
-- XMEANT / YiSi-2 style reference-free mode: `meant.score_xlingual(...)`
+Variants
+--------
+- standard MEANT (frame-based, this default)
+- YiSi-1 / WOLVESAAR no-SRL mode: ``Ryokai(lang=..., use_srl=False)``
+- XMEANT / YiSi-2 reference-free mode: ``r.score_xlingual(...)``
+- SimAlign-style contextual word alignment: ``aligner="argmax" | "itermax" | "mai" | "hungarian"``
 """
 from __future__ import annotations
 
 from ._langs import SUPPORTED_LANGS
 from .graph import Argument, Frame, SRLGraph
 from .labelconfig import LabelConfig
-from .scorer import DEFAULT_WEIGHTS, MEANTScore, score_nosrl, score_pair
-from .sim.embeddings import EmbeddingSimBackend
+from .scorer import DEFAULT_WEIGHTS, MEANTScore, Score, score_nosrl, score_pair
 from .sim import ContextualTokenSimBackend, StaticEmbeddingSimBackend
+from .sim.embeddings import EmbeddingSimBackend
 from .srl import HFPOSHeuristicSRLBackend, HFTokenClassifierSRLBackend, SRLBackend
 
 __version__ = "0.1.0"
 
-__all__ = [
-    "MEANT",
-    "MEANTScore",
-    "SRLGraph",
-    "Frame",
-    "Argument",
-    "LabelConfig",
-    "SRLBackend",
-    "HFPOSHeuristicSRLBackend",
-    "HFTokenClassifierSRLBackend",
-    "EmbeddingSimBackend",
-    "ContextualTokenSimBackend",
-    "StaticEmbeddingSimBackend",
-    "DEFAULT_WEIGHTS",
-    "SUPPORTED_LANGS",
-    "score_pair",
-    "score_nosrl",
-]
 
-
-class MEANT:
+class Ryokai:
     """Top-level MT-eval API.
+
+    One class drives all scoring modes; what mode you get depends on the
+    constructor flags and which ``score*`` method you call:
+
+    +-------------------------------+-----------------------------------------+
+    | Call                          | Mode                                    |
+    +===============================+=========================================+
+    | ``Ryokai(lang).score(r, h)``  | Full MEANT 2.0 — semantic frames        |
+    | ``Ryokai(lang, use_srl=False) | YiSi-1 / WOLVESAAR — no SRL, word       |
+    |   .score(r, h)``              | alignment + embedding F-score           |
+    | ``.score_xlingual(s, h, sl)`` | XMEANT / YiSi-2 — reference-free        |
+    +-------------------------------+-----------------------------------------+
 
     Parameters
     ----------
     lang : str
-        Two-letter language code (one of `SUPPORTED_LANGS`).
+        Two-letter language code of the hypothesis (one of `SUPPORTED_LANGS`).
     use_srl : bool
-        If True (default), use the SRL backend and run full MEANT
-        frame-based scoring. If False, fall back to YiSi-1-style
-        embedding-only token alignment — no SRL needed, faster, fewer
-        downloads.
+        If True (default), run the full frame-based MEANT pipeline. If
+        False, use the YiSi-1 / WOLVESAAR no-SRL fallback (word alignment
+        + embedding F-score).
     srl_backend : SRLBackend | None
-        SRL backend to use when `use_srl=True`. Defaults to
-        `HFPOSHeuristicSRLBackend` — pure HuggingFace transformers
-        (multilingual XLM-R POS), covers all 13 MEANT languages with
-        one model. Plug in `HFTokenClassifierSRLBackend(model_id)` for
-        a proper PropBank-grade SRL model.
+        SRL backend used when `use_srl=True`. Defaults to
+        `HFPOSHeuristicSRLBackend` — a multilingual XLM-R UDPOS heuristic
+        covering all 13 supported languages with one model.
     sim_backend : EmbeddingSimBackend | None
-        Lexical similarity backend. Defaults to multilingual
-        sentence-transformers MiniLM (also covers all 13 langs in one
-        110 MB model and supports cross-lingual sim out of the box).
+        Sentence / argument similarity backend. Defaults to multilingual
+        MiniLM. Swap to any preset (``"qwen3-0.6b"``, ``"jina-v3"``,
+        ``"nemotron-8b"``…) or any HF model id.
     weights : dict[str, float] | None
-        Per-role weights. Defaults to `DEFAULT_WEIGHTS`.
+        Per-role weights for MEANT F-score. Defaults to `DEFAULT_WEIGHTS`.
     label_config : LabelConfig | None
-        SRL label aliasing. Defaults to the bundled `data/labelconfig.yaml`.
+        SRL label aliasing. Defaults to bundled `data/labelconfig.yaml`.
+    content_only : bool
+        No-SRL only: drop stopwords + punctuation before alignment
+        (WOLVESAAR style).
+    aggregation : str
+        No-SRL only: ``"f1"`` (default) or ``"harmonic"``.
+    aligner : str
+        No-SRL only: ``"sentence"`` (fast, default), ``"hungarian"``,
+        ``"argmax"``, ``"itermax"``, or ``"mai"``.
+    threshold : float
+        No-SRL contextual aligners: cosine floor below which a pair is
+        discarded. Default 0.5.
+    exact_match_shortcut : bool
+        No-SRL contextual aligners: case-insensitive surface equality
+        boosts a pair's similarity to 1.0 (Sultan-style prior).
     """
 
     def __init__(
@@ -112,7 +122,7 @@ class MEANT:
             return SRLGraph(sentence=sentence)
         return self.srl.parse(sentence, lang or self.lang)
 
-    def score(self, reference: str, hypothesis: str) -> MEANTScore:
+    def score(self, reference: str, hypothesis: str) -> Score:
         """Score a single ref/hyp MT pair. Higher = more adequate."""
         if not self.use_srl:
             return score_nosrl(
@@ -134,8 +144,8 @@ class MEANT:
         self,
         references: list[str],
         hypotheses: list[str],
-    ) -> list[MEANTScore]:
-        """Score a parallel corpus — one MEANTScore per pair."""
+    ) -> list[Score]:
+        """Score a parallel corpus — one Score per (ref, hyp) pair."""
         if len(references) != len(hypotheses):
             raise ValueError(
                 f"len(references)={len(references)} != len(hypotheses)={len(hypotheses)}"
@@ -147,15 +157,15 @@ class MEANT:
         source: str,
         hypothesis: str,
         source_lang: str,
-    ) -> MEANTScore:
+    ) -> Score:
         """XMEANT / YiSi-2 style **reference-free** scoring.
 
         Scores `hypothesis` (in `self.lang`) directly against `source`
         (in `source_lang`) using cross-lingual semantic-frame agreement.
-        No reference translation needed — works because both SRL backend
-        and similarity backend handle multiple languages in one model.
+        No reference translation needed — works because both SRL and
+        similarity backends are multilingual.
 
-        Cite: Lo et al. 2014 "XMEANT" (P14-2124) and Lo 2019 "YiSi" (WMT19).
+        Cite: Lo et al. 2014 (XMEANT, P14-2124) and Lo 2019 (YiSi, WMT19).
         """
         if source_lang not in SUPPORTED_LANGS:
             raise ValueError(
@@ -183,3 +193,28 @@ class MEANT:
             self.weights,
             self.label_config,
         )
+
+
+# Backwards-compatible alias — most MT-eval literature calls this MEANT.
+MEANT = Ryokai
+
+__all__ = [
+    "Ryokai",
+    "MEANT",
+    "Score",
+    "MEANTScore",
+    "SRLGraph",
+    "Frame",
+    "Argument",
+    "LabelConfig",
+    "SRLBackend",
+    "HFPOSHeuristicSRLBackend",
+    "HFTokenClassifierSRLBackend",
+    "EmbeddingSimBackend",
+    "ContextualTokenSimBackend",
+    "StaticEmbeddingSimBackend",
+    "DEFAULT_WEIGHTS",
+    "SUPPORTED_LANGS",
+    "score_pair",
+    "score_nosrl",
+]

@@ -41,8 +41,11 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 
 
 @dataclass
-class MEANTScore:
-    """The output of MEANT scoring for one (ref, hyp) pair."""
+class Score:
+    """The output of scoring one (ref, hyp) pair.
+
+    Float-coerces to `f1` so `float(score)` returns the headline number.
+    """
     precision: float
     recall: float
     f1: float
@@ -52,6 +55,10 @@ class MEANTScore:
 
     def __float__(self) -> float:  # so float(score) returns f1
         return self.f1
+
+
+# Backwards-compatible alias — historical name from the MEANT papers.
+MEANTScore = Score
 
 
 def _resolve_labels(graph: SRLGraph, label_config: LabelConfig) -> None:
@@ -68,15 +75,15 @@ def _score_one(
     sim_backend: EmbeddingSimBackend,
     weights: dict[str, float],
     label_config: LabelConfig,
-) -> MEANTScore:
+) -> Score:
     _resolve_labels(ref, label_config)
     _resolve_labels(hyp, label_config)
 
     if not ref.frames and not hyp.frames:
         # degenerate: nothing to compare -> treat as exact match
-        return MEANTScore(1.0, 1.0, 1.0, 0, 0, 0)
+        return Score(1.0, 1.0, 1.0, 0, 0, 0)
     if not ref.frames or not hyp.frames:
-        return MEANTScore(0.0, 0.0, 0.0, len(ref.frames), len(hyp.frames), 0)
+        return Score(0.0, 0.0, 0.0, len(ref.frames), len(hyp.frames), 0)
 
     # 1) align predicates by lexical similarity of the predicate text
     ref_preds = [f.predicate for f in ref.frames]
@@ -141,7 +148,7 @@ def _score_one(
         f1 = 0.0
     else:
         f1 = 2 * precision * recall / (precision + recall)
-    return MEANTScore(
+    return Score(
         precision=float(np.clip(precision, 0.0, 1.0)),
         recall=float(np.clip(recall, 0.0, 1.0)),
         f1=float(np.clip(f1, 0.0, 1.0)),
@@ -157,7 +164,7 @@ def score_pair(
     sim_backend: EmbeddingSimBackend | None = None,
     weights: dict[str, float] | None = None,
     label_config: LabelConfig | None = None,
-) -> MEANTScore:
+) -> Score:
     """Score a single (reference, hypothesis) pair already parsed into graphs."""
     return _score_one(
         ref_graph,
@@ -179,7 +186,7 @@ def score_nosrl(
     aligner: str = "sentence",
     threshold: float = 0.5,
     exact_match_shortcut: bool = True,
-) -> MEANTScore:
+) -> Score:
     """No-SRL MEANT — YiSi-1 / WOLVESAAR-style.
 
     Bypasses the SRL graph: align reference and hypothesis tokens
@@ -263,9 +270,9 @@ def score_nosrl(
             pairs = [(i, j, s) for i, j, s in pairs if i in ref_keep and j in hyp_keep]
         n_ref, n_hyp = len(ref_words), len(hyp_words)
         if n_ref == 0 and n_hyp == 0:
-            return MEANTScore(1.0, 1.0, 1.0, 0, 0, 0)
+            return Score(1.0, 1.0, 1.0, 0, 0, 0)
         if n_ref == 0 or n_hyp == 0:
-            return MEANTScore(0.0, 0.0, 0.0, 0, 0, 0)
+            return Score(0.0, 0.0, 0.0, 0, 0, 0)
         matched_sum = sum(s for _, _, s in pairs)
         precision = matched_sum / n_hyp
         recall = matched_sum / n_ref
@@ -279,9 +286,9 @@ def score_nosrl(
             ref_tokens = [t for t in ref_tokens if is_content_token(t, lang)]
             hyp_tokens = [t for t in hyp_tokens if is_content_token(t, lang)]
         if not ref_tokens and not hyp_tokens:
-            return MEANTScore(1.0, 1.0, 1.0, 0, 0, 0)
+            return Score(1.0, 1.0, 1.0, 0, 0, 0)
         if not ref_tokens or not hyp_tokens:
-            return MEANTScore(0.0, 0.0, 0.0, 0, 0, 0)
+            return Score(0.0, 0.0, 0.0, 0, 0, 0)
         s = sim.sim(ref_tokens, hyp_tokens)
         from .match import max_match
         _, matched_sum = max_match(s)
@@ -292,7 +299,7 @@ def score_nosrl(
         2 * precision * recall / (precision + recall)
         if (precision + recall) else 0.0
     )
-    return MEANTScore(
+    return Score(
         precision=float(np.clip(precision, 0.0, 1.0)),
         recall=float(np.clip(recall, 0.0, 1.0)),
         f1=float(np.clip(combined, 0.0, 1.0)),
