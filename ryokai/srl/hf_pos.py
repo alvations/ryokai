@@ -30,7 +30,10 @@ from functools import lru_cache
 from ..graph import Argument, Frame, SRLGraph
 from . import SRLBackend
 
-DEFAULT_POS_MODEL = "wietsedv/xlm-roberta-base-ft-udpos28"
+# Per-language XLM-R UDPOS28 models (Wietse de Vries et al., ACL 2022).
+# The pattern `{lang}` is filled in per-call from the `lang` arg to .parse().
+# Coverage matches `_langs._EXTRA_LANGS` + `MEANT_LANGS` (~38 langs total).
+DEFAULT_POS_MODEL = "wietsedv/xlm-roberta-base-ft-udpos28-{lang}"
 
 _PRED_POS = {"VERB", "AUX"}
 _ARG_POS = {"NOUN", "PROPN", "PRON"}
@@ -148,15 +151,28 @@ def _argm_label(text: str) -> str | None:
 class HFPOSHeuristicSRLBackend(SRLBackend):
     """Pseudo-SRL using a multilingual HF POS tagger only.
 
-    Default model `wietsedv/xlm-roberta-base-ft-udpos28` covers all 13
-    MEANT languages plus 15 others.
+    Default model id is the Wietse de Vries XLM-R UDPOS28 family
+    (`wietsedv/xlm-roberta-base-ft-udpos28-{lang}`). The `{lang}` token
+    is filled per-call from the `lang` argument of `.parse()`, so the
+    correct per-language model is loaded automatically.
+
+    Pass an explicit string without `{lang}` to pin a single model:
+
+        HFPOSHeuristicSRLBackend(
+            pos_model="wietsedv/xlm-roberta-base-ft-udpos28-en",
+        )
     """
 
     def __init__(self, pos_model: str = DEFAULT_POS_MODEL) -> None:
         self.pos_model = pos_model
 
-    def parse(self, sentence: str, lang: str) -> SRLGraph:  # noqa: ARG002
-        tokens = _tokens_with_pos(sentence, self.pos_model)
+    def _resolve_model_id(self, lang: str) -> str:
+        if "{lang}" in self.pos_model:
+            return self.pos_model.format(lang=lang)
+        return self.pos_model
+
+    def parse(self, sentence: str, lang: str) -> SRLGraph:
+        tokens = _tokens_with_pos(sentence, self._resolve_model_id(lang))
         graph = SRLGraph(sentence=sentence)
         if not tokens:
             return graph

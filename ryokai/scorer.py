@@ -231,23 +231,67 @@ def score_nosrl(
         `"f1"` (default) or `"harmonic"`. Both reduce to the same formula
         2·p·r/(p+r) — separate name kept so callers can be explicit about intent.
     aligner : str
-        `"sentence"` (default, fast) or one of the contextual variants
-        `"hungarian"` / `"argmax"` / `"itermax"`. `"itermax"` is the
-        SimAlign-recommended best-quality option.
+        `"sentence"` (default, fast), `"bertscore"` (BERTScore-style greedy
+        soft alignment), or one of the contextual variants
+        `"hungarian"` / `"argmax"` / `"itermax"` / `"mai"`.
     threshold : float
         Used by `aligner="contextual"`: alignment cosine floor. Default 0.5.
     exact_match_shortcut : bool
         Used by `aligner="contextual"`: case-insensitive surface-form equality
         boosts the pair's similarity to 1.0, matching Sultan et al.'s
         lexical-prior cascade. Default True.
+
+    The `"bertscore"` aligner reproduces Zhang et al. (2020) BERTScore:
+    precision = mean over hyp tokens of max-cosine to any ref token;
+    recall = mean over ref tokens of max-cosine to any hyp token; F1 over
+    both. Uses the same contextual encoder as the other contextual
+    aligners. No threshold / pairing is applied — every token contributes
+    to either P or R.
     """
     if aggregation not in ("f1", "harmonic"):
         raise ValueError(f"aggregation must be 'f1' or 'harmonic', got {aggregation!r}")
     contextual_methods = {"hungarian", "argmax", "itermax", "mai"}
-    if aligner not in ({"sentence"} | contextual_methods):
+    bertscore_method = {"bertscore"}
+    if aligner not in ({"sentence"} | contextual_methods | bertscore_method):
         raise ValueError(
-            f"aligner must be 'sentence' or one of {sorted(contextual_methods)}, "
-            f"got {aligner!r}"
+            f"aligner must be 'sentence', 'bertscore', or one of "
+            f"{sorted(contextual_methods)}, got {aligner!r}"
+        )
+
+    if aligner == "bertscore":
+        from .sim.contextual import ContextualTokenSimBackend, _embed_words
+        from .stopwords import is_content_token
+        ctx = ContextualTokenSimBackend()
+        ref_words, ref_vecs = _embed_words(reference, ctx.model_id, ctx.layer)
+        hyp_words, hyp_vecs = _embed_words(hypothesis, ctx.model_id, ctx.layer)
+        if content_only:
+            ref_keep = [i for i, w in enumerate(ref_words) if is_content_token(w, lang)]
+            hyp_keep = [j for j, w in enumerate(hyp_words) if is_content_token(w, lang)]
+            ref_words = [ref_words[i] for i in ref_keep]
+            hyp_words = [hyp_words[j] for j in hyp_keep]
+            if ref_keep:
+                ref_vecs = ref_vecs[ref_keep]
+            if hyp_keep:
+                hyp_vecs = hyp_vecs[hyp_keep]
+        n_ref, n_hyp = len(ref_words), len(hyp_words)
+        if n_ref == 0 and n_hyp == 0:
+            return Score(1.0, 1.0, 1.0, 0, 0, 0)
+        if n_ref == 0 or n_hyp == 0:
+            return Score(0.0, 0.0, 0.0, 0, 0, 0)
+        sim = (ref_vecs @ hyp_vecs.T).astype(np.float32)  # (n_ref, n_hyp)
+        recall = float(sim.max(axis=1).mean())            # each ref -> best hyp
+        precision = float(sim.max(axis=0).mean())         # each hyp -> best ref
+        combined = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) else 0.0
+        )
+        return Score(
+            precision=float(np.clip(precision, 0.0, 1.0)),
+            recall=float(np.clip(recall, 0.0, 1.0)),
+            f1=float(np.clip(combined, 0.0, 1.0)),
+            n_frames_ref=0,
+            n_frames_hyp=0,
+            n_aligned_predicates=0,
         )
 
     if aligner in contextual_methods:

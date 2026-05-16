@@ -4,12 +4,15 @@ import pytest
 from ryokai import Ryokai, SUPPORTED_LANGS
 
 
-def test_supported_langs_is_13_languages():
-    assert len(SUPPORTED_LANGS) == 13
-    assert set(SUPPORTED_LANGS) == {
+def test_supported_langs_includes_meant_13_plus_ja():
+    # 13 MEANT 2.0 languages must be there (first-class, curated stopwords)
+    meant13 = {
         "en", "de", "fr", "es", "cs", "fi", "hi",
         "lv", "pl", "ro", "ru", "tr", "zh",
     }
+    assert meant13.issubset(set(SUPPORTED_LANGS))
+    # plus ja (used in the README quickstart)
+    assert "ja" in SUPPORTED_LANGS
 
 
 def test_score_requires_source_xor_reference():

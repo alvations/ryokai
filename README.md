@@ -18,41 +18,57 @@ pip install ryokai
 ## Quickstart
 
 ```python
-from ryokai import Ryokai
+from ryokai import Ryokai, EmbeddingSimBackend
 
-scorer = Ryokai()
-src_lang, tgt_lang = "en", "ja"
+# explicit `sim_backend` shown so you see which model is used by default
+scorer = Ryokai(sim_backend=EmbeddingSimBackend("minilm"))
+
+src = "The cat sat on the mat yesterday."
+hyp = "猫は昨日マットの上に座った。"
 
 # Most common: reference-free, word alignment + embedding
 # (XMEANT-lite / YiSi-2 / Doc-embedding adequacy cross-lingual)
 scorer.score(source=src, hypothesis=hyp,
-             source_lang=src_lang, target_lang=tgt_lang)
+             source_lang="en", target_lang="ja")
 ```
 
 ## Variants
 
-One `.score()` call, four modes, dispatched by which arguments you pass. `srl=False` is the default — `ryokai` is no longer MEANT-first.
+One `.score()` call, five modes, dispatched by which arguments you pass plus the `aligner=` / `srl=` knobs. `srl=False` is the default — `ryokai` is no longer MEANT-first.
 
 ```python
-from ryokai import Ryokai
-scorer = Ryokai()
-src_lang, tgt_lang = "en", "ja"
+from ryokai import Ryokai, EmbeddingSimBackend
 
-# Reference-free, word alignment + embedding (default, most common)
-# E.g. Doc-embedding adequacy / YiSi-2 / XMEANT-lite
+# default backbone shown explicitly so you know which model is loaded
+scorer = Ryokai(sim_backend=EmbeddingSimBackend("minilm"))
+
+src = "The cat sat on the mat yesterday."
+hyp = "猫は昨日マットの上に座った。"
+ref = "猫は昨日マットの上に座った。"
+para = "猫は昨日マットの上に座っていた。"
+
+# 1. Reference-free, word alignment + embedding  (default, most common)
+#    Doc-embedding adequacy / YiSi-2 / XMEANT-lite
 scorer.score(source=src, hypothesis=hyp,
-             source_lang=src_lang, target_lang=tgt_lang)
+             source_lang="en", target_lang="ja")
 
-# Reference-based, word alignment + embedding
-# E.g. Doc-embedding adequacy / WOLVESAAR / YiSi-1 / SimAlign style
-scorer.score(reference=ref, hypothesis=hyp, target_lang=tgt_lang)
+# 2. Reference-based, word alignment + embedding
+#    Doc-embedding adequacy / WOLVESAAR / YiSi-1 / SimAlign style
+scorer.score(reference=ref, hypothesis=para, target_lang="ja")
 
-# Reference-free, frame-based — XMEANT proper
+# 3. Reference-free, frame-based  (XMEANT proper)
 scorer.score(source=src, hypothesis=hyp,
-             source_lang=src_lang, target_lang=tgt_lang, srl=True)
+             source_lang="en", target_lang="ja", srl=True)
 
-# Reference-based, frame-based — MEANT 2.0
-scorer.score(reference=ref, hypothesis=hyp, target_lang=tgt_lang, srl=True)
+# 4. Reference-based, frame-based  (MEANT 2.0)
+scorer.score(reference=ref, hypothesis=para, target_lang="ja", srl=True)
+
+# 5. BERTScore-style greedy soft alignment + embedding F1
+#    (Zhang et al. 2020) — same dispatch, different aligner
+bertscore = Ryokai(sim_backend=EmbeddingSimBackend("minilm"),
+                   aligner="bertscore")
+bertscore.score(source=src, hypothesis=hyp,
+                source_lang="en", target_lang="ja")
 ```
 
 See [`DOCUMENTATION.md`](DOCUMENTATION.md) for flags, aligner choices, embedding-backbone swaps, AER evaluation harness, CLI, architecture, and custom role weights.

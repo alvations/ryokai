@@ -1,10 +1,11 @@
 """Tests for the bundled multilingual stopword loader."""
-from ryokai import SUPPORTED_LANGS
+from ryokai._langs import MEANT_LANGS
 from ryokai.stopwords import is_content_token, stopwords_for
 
 
 def test_stopwords_loaded_for_all_13_meant_languages():
-    for lang in SUPPORTED_LANGS:
+    """Curated stopword lists exist for every MEANT-13 language."""
+    for lang in MEANT_LANGS:
         sw = stopwords_for(lang)
         assert len(sw) > 0, f"empty stopwords for {lang}"
 
