@@ -48,36 +48,18 @@ See [`DOCUMENTATION.md`](DOCUMENTATION.md) for flags, aligner choices, embedding
 
 ## References
 
-Ryokai is glue around several published techniques. Credit belongs to their authors. The table groups them by family.
+Ryokai is glue around several published techniques — credit belongs to their authors.
 
-### Semantic-frame MT evaluation
-
-| Technique | Citation | Link |
-| --------- | -------- | ---- |
-| **MEANT** | Lo & Wu (2011) — *MEANT: An inexpensive, high-accuracy, semi-automatic metric for evaluating translation utility based on semantic roles*, ACL 2011 | [P11-2042](https://aclanthology.org/P11-2042/) |
-| **XMEANT** | Lo, Beloucif, Saers, Wu (2014) — *XMEANT: Better semantic MT evaluation without reference translations*, ACL 2014 (Short Papers), pp. 765–771 | [P14-2124](https://aclanthology.org/P14-2124/) |
-| **MEANT 2.0** | Lo (2017) — *MEANT 2.0: Accurate semantic MT evaluation for any output language*, WMT 2017 | [W17-4767](https://aclanthology.org/W17-4767/) |
-
-### Embedding-based MT evaluation
-
-| Technique | Citation | Link |
-| --------- | -------- | ---- |
-| **Doc-embedding adequacy** | Vela & Tan (2015) — *Predicting Machine Translation Adequacy with Document Embeddings*, WMT 2015, pp. 402–410 | [W15-3051](https://aclanthology.org/W15-3051/) |
-| **WOLVESAAR** | Bechara, Gupta, Tan, Orăsan, Mitkov, van Genabith (2016) — *WOLVESAAR at SemEval-2016 Task 1: Replicating the Success of Monolingual Word Alignment and Neural Embeddings for STS*, SemEval-2016, pp. 634–639 | [S16-1096](https://aclanthology.org/S16-1096/) |
-| **YiSi** | Lo (2019) — *YiSi — a Unified Semantic MT Quality Evaluation and Estimation Metric for Languages with Different Levels of Available Resources*, WMT 2019 | [W19-5358](https://aclanthology.org/W19-5358/) |
-
-### Word alignment
-
-| Technique | Citation | Link |
-| --------- | -------- | ---- |
-| **Monolingual aligner** | Sultan, Bethard, Sumner (2014) — *Back to Basics for Monolingual Alignment: Exploiting Word Similarity and Contextual Evidence*, TACL 2014 | [Q14-1018](https://aclanthology.org/Q14-1018/) |
-| **SimAlign** | Jalili Sabet, Dufter, Yvon, Schütze (2020) — *SimAlign: High Quality Word Alignments without Parallel Training Data using Static and Contextualized Embeddings*, Findings of EMNLP 2020 | [2020.findings-emnlp.147](https://aclanthology.org/2020.findings-emnlp.147/) |
-
-### Alignment evaluation
-
-| Technique | Citation | Link |
-| --------- | -------- | ---- |
-| **AER** | Och & Ney (2003) — *A Systematic Comparison of Various Statistical Alignment Models*, Computational Linguistics 29(1), pp. 19–51 | [J03-1002](https://aclanthology.org/J03-1002/) |
+| Category | Technique | Author (year) |
+| -------- | --------- | ------------- |
+| Semantic-frame MT evaluation  | [MEANT](https://aclanthology.org/P11-2042/)                              | Lo & Wu (2011) |
+| Semantic-frame MT evaluation  | [XMEANT](https://aclanthology.org/P14-2124/)                             | Lo, Beloucif, Saers & Wu (2014) |
+| Semantic-frame MT evaluation  | [MEANT 2.0](https://aclanthology.org/W17-4767/)                          | Lo (2017) |
+| Embedding-based MT evaluation | [Doc-embedding adequacy](https://aclanthology.org/W15-3051/)             | Vela & Tan (2015) |
+| Embedding-based MT evaluation | [WOLVESAAR](https://aclanthology.org/S16-1096/)                          | Bechara, Gupta, Tan, Orăsan, Mitkov & van Genabith (2016) |
+| Embedding-based MT evaluation | [YiSi](https://aclanthology.org/W19-5358/)                               | Lo (2019) |
+| Word alignment                | [Monolingual aligner](https://aclanthology.org/Q14-1018/)                | Sultan, Bethard & Sumner (2014) |
+| Word alignment                | [SimAlign](https://aclanthology.org/2020.findings-emnlp.147/)            | Jalili Sabet, Dufter, Yvon & Schütze (2020) |
 
 ## License
 
