@@ -50,16 +50,16 @@ See [`DOCUMENTATION.md`](DOCUMENTATION.md) for flags, aligner choices, embedding
 
 Ryokai is glue around several published techniques — credit belongs to their authors.
 
-| Category | Technique | Author (year) |
-| -------- | --------- | ------------- |
-| Semantic-frame MT evaluation  | [MEANT](https://aclanthology.org/P11-2042/)                              | Lo & Wu (2011) |
-| Semantic-frame MT evaluation  | [XMEANT](https://aclanthology.org/P14-2124/)                             | Lo, Beloucif, Saers & Wu (2014) |
-| Semantic-frame MT evaluation  | [MEANT 2.0](https://aclanthology.org/W17-4767/)                          | Lo (2017) |
-| Embedding-based MT evaluation | [Doc-embedding adequacy](https://aclanthology.org/W15-3051/)             | Vela & Tan (2015) |
-| Embedding-based MT evaluation | [WOLVESAAR](https://aclanthology.org/S16-1096/)                          | Bechara, Gupta, Tan, Orăsan, Mitkov & van Genabith (2016) |
-| Embedding-based MT evaluation | [YiSi](https://aclanthology.org/W19-5358/)                               | Lo (2019) |
-| Word alignment                | [Monolingual aligner](https://aclanthology.org/Q14-1018/)                | Sultan, Bethard & Sumner (2014) |
-| Word alignment                | [SimAlign](https://aclanthology.org/2020.findings-emnlp.147/)            | Jalili Sabet, Dufter, Yvon & Schütze (2020) |
+| Technique | Year | Citation | Category |
+| --------- | ---- | -------- | -------- |
+| MEANT                  | 2011 | [Lo & Wu — ACL 2011](https://aclanthology.org/P11-2042/)                                                        | Semantic-frame MT evaluation  |
+| XMEANT                 | 2014 | [Lo, Beloucif, Saers & Wu — ACL 2014](https://aclanthology.org/P14-2124/)                                       | Semantic-frame MT evaluation  |
+| MEANT 2.0              | 2017 | [Lo — WMT 2017](https://aclanthology.org/W17-4767/)                                                              | Semantic-frame MT evaluation  |
+| Doc-embedding adequacy | 2015 | [Vela & Tan — WMT 2015](https://aclanthology.org/W15-3051/)                                                      | Embedding-based MT evaluation |
+| WOLVESAAR              | 2016 | [Bechara, Gupta, Tan, Orăsan, Mitkov & van Genabith — SemEval 2016](https://aclanthology.org/S16-1096/)         | Embedding-based MT evaluation |
+| YiSi                   | 2019 | [Lo — WMT 2019](https://aclanthology.org/W19-5358/)                                                              | Embedding-based MT evaluation |
+| Monolingual aligner    | 2014 | [Sultan, Bethard & Sumner — TACL 2014](https://aclanthology.org/Q14-1018/)                                       | Word alignment                |
+| SimAlign               | 2020 | [Jalili Sabet, Dufter, Yvon & Schütze — Findings of EMNLP 2020](https://aclanthology.org/2020.findings-emnlp.147/) | Word alignment                |
 
 ## License
 
