@@ -1,8 +1,8 @@
 """Scorer tests with hand-crafted SRLGraphs — no SRL / embedding download."""
 import numpy as np
 
-from pymeant.graph import Argument, Frame, SRLGraph
-from pymeant.scorer import DEFAULT_WEIGHTS, score_pair
+from ryokai.graph import Argument, Frame, SRLGraph
+from ryokai.scorer import DEFAULT_WEIGHTS, score_pair
 
 
 class _IdentitySim:

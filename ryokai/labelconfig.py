@@ -17,7 +17,7 @@ import yaml
 @lru_cache(maxsize=2)
 def _load(path: str | None) -> dict[str, list[str]]:
     if path is None:
-        text = files("pymeant").joinpath("data", "labelconfig.yaml").read_text(encoding="utf-8")
+        text = files("ryokai").joinpath("data", "labelconfig.yaml").read_text(encoding="utf-8")
     else:
         text = Path(path).read_text(encoding="utf-8")
     return yaml.safe_load(text)

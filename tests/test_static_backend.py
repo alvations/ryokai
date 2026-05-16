@@ -5,7 +5,7 @@ tests cover everything that doesn't require downloading models."""
 import numpy as np
 import pytest
 
-from pymeant.sim.static import StaticEmbeddingSimBackend, _dispatch_match
+from ryokai.sim.static import StaticEmbeddingSimBackend, _dispatch_match
 
 
 def test_static_backend_resolves_ctx_preset_alias():

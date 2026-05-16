@@ -1,4 +1,4 @@
-"""pymeant CLI: score a parallel ref/hyp text file pair."""
+"""ryokai CLI: score a parallel ref/hyp text file pair."""
 from __future__ import annotations
 
 import argparse
@@ -9,7 +9,7 @@ from . import MEANT, SUPPORTED_LANGS
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        prog="pymeant",
+        prog="ryokai",
         description="Score MT output with MEANT (semantic-frame eval metric).",
     )
     p.add_argument("--ref", required=True, help="Path to reference text (one segment per line).")

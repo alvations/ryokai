@@ -1,6 +1,6 @@
 """Tests for the bundled multilingual stopword loader."""
-from pymeant import SUPPORTED_LANGS
-from pymeant.stopwords import is_content_token, stopwords_for
+from ryokai import SUPPORTED_LANGS
+from ryokai.stopwords import is_content_token, stopwords_for
 
 
 def test_stopwords_loaded_for_all_13_meant_languages():

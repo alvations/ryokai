@@ -1,7 +1,7 @@
 """Lightweight API surface tests."""
 import pytest
 
-from pymeant import MEANT, SUPPORTED_LANGS
+from ryokai import MEANT, SUPPORTED_LANGS
 
 
 def test_supported_langs_is_13_languages():

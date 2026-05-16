@@ -1,6 +1,6 @@
 """Preset registries for sentence + contextual embedding backbones."""
-from pymeant.sim.contextual import CTX_PRESETS, ContextualTokenSimBackend
-from pymeant.sim.embeddings import EMBEDDING_PRESETS, EmbeddingSimBackend
+from ryokai.sim.contextual import CTX_PRESETS, ContextualTokenSimBackend
+from ryokai.sim.embeddings import EMBEDDING_PRESETS, EmbeddingSimBackend
 
 
 def test_embedding_presets_include_modern_2025_models():

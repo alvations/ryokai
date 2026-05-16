@@ -1,7 +1,7 @@
 """Pure-Python tests for the Hungarian matching wrapper."""
 import numpy as np
 
-from pymeant.match import max_match
+from ryokai.match import max_match
 
 
 def test_identity_matrix_one_to_one_diagonal():

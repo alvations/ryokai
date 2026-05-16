@@ -17,7 +17,7 @@ _PUNCT_SET = set(string.punctuation) | {
 def _load_all() -> dict[str, set[str]]:
     """Load stopwords. Uses BaseLoader so YAML's bool aliases (`no`, `yes`,
     `on`, `off`, `true`, `false`) and integer-looking tokens stay strings."""
-    text = files("pymeant").joinpath("data", "stopwords.yaml").read_text(encoding="utf-8")
+    text = files("ryokai").joinpath("data", "stopwords.yaml").read_text(encoding="utf-8")
     raw: dict[str, list[str]] = yaml.load(text, Loader=yaml.BaseLoader)
     out: dict[str, set[str]] = {}
     for lang, words in raw.items():

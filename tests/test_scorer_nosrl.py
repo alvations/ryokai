@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from pymeant.scorer import score_nosrl
+from ryokai.scorer import score_nosrl
 
 
 class _IdentitySim:

@@ -1,8 +1,8 @@
-"""pymeant — Python port of MEANT 2.0.
+"""ryokai — Python port of MEANT 2.0.
 
 Quickstart
 ----------
->>> from pymeant import MEANT
+>>> from ryokai import MEANT
 >>> meant = MEANT(lang="en")
 >>> meant.score(
 ...     reference="The cat sat on the mat.",

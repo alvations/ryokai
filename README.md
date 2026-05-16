@@ -1,33 +1,38 @@
-# pymeant
+# ryokai 了解
 
-Python port of the **MEANT 2.0** machine-translation evaluation metric, with **XMEANT** (reference-free) and **YiSi-1** (no-SRL) modes built in.
+> *Ryokai* (了解, "understood / got it") — a unified Python library for **semantic machine-translation evaluation**, combining the strengths of MEANT, XMEANT, YiSi, WOLVESAAR, and SimAlign behind one clean API on top of modern multilingual embeddings.
 
 Pure PyTorch + HuggingFace `transformers` — no Stanza, no spaCy, no external parsers. Two HF models cover **all 13 MEANT languages** (`en`, `de`, `fr`, `es`, `cs`, `fi`, `hi`, `lv`, `pl`, `ro`, `ru`, `tr`, `zh`) in a single install:
 
 - POS / shallow SRL: [`wietsedv/xlm-roberta-base-ft-udpos28`](https://huggingface.co/wietsedv/xlm-roberta-base-ft-udpos28) — ~1.1 GB once.
 - Multilingual embeddings: [`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) — ~110 MB once, used for both **same-language** and **cross-language** similarity.
 
-## Why MEANT?
+## What's inside
 
-Unlike BLEU/chrF (n-gram overlap) or COMET/BERTScore (sentence-level embeddings), MEANT scores translations by **semantic-role agreement**:
+Ryokai is a single-import home for several MT-eval techniques that have historically lived in separate codebases (or, in MEANT's case, only as C++ binaries):
 
-1. Parse the reference and hypothesis into predicate-argument frames.
-2. Hungarian-match predicates by lexical similarity.
-3. For each matched predicate, Hungarian-match the arguments under the same canonical role (`A0`, `A1`, `TMP`, `LOC`, …).
-4. Aggregate to a weighted F-score over role labels.
+| Technique | Year | What it brings | ryokai entry point |
+| --------- | ---- | -------------- | ------------------ |
+| **MEANT 2.0** (Lo) | 2017 | Semantic-frame F-score: predicates + role fillers aligned via Hungarian matching | `MEANT(lang).score(ref, hyp)` |
+| **XMEANT** (Lo et al.) | 2014 | Reference-free MEANT — score MT against source directly | `MEANT(lang).score_xlingual(src, hyp, source_lang)` |
+| **YiSi-1 / YiSi-2** (Lo) | 2019 | Embedding-based scoring, with / without SRL, with / without reference | `MEANT(lang, use_srl=False)` |
+| **WOLVESAAR** (Bechara, Gupta, Tan et al.) | 2016 | Monolingual content-word alignment + sentence vector composition | `score_nosrl(ref, hyp, content_only=True, aggregation="harmonic")` |
+| **Sultan et al.** | 2014 | Contextual word alignment with exact-match prior + threshold | `ContextualTokenSimBackend` with `aligner="hungarian"` |
+| **SimAlign** (Jalili Sabet et al.) | 2020 | ArgMax / IterMax / MAI word aligners over multilingual encoders | `aligner="argmax"` / `"itermax"` / `"mai"` |
+| **AER** (Och & Ney) | 2003 | Standard evaluation harness for word aligners | `ryokai.eval.aer(...)` / `evaluate_aligner(...)` |
 
-The role-label canonicalisation (`pymeant/data/labelconfig.yaml`) collapses PropBank / Chinese PropBank / AnCora / reference-and-continuation tags into one ontology, so the same scorer works across languages.
+The role-label canonicalisation (`ryokai/data/labelconfig.yaml`) collapses PropBank / Chinese PropBank / AnCora / reference-and-continuation tags into one ontology so the same scorer works across languages.
 
 ## Install
 
 ```bash
-pip install pymeant
+pip install ryokai
 ```
 
 ## Quickstart
 
 ```python
-from pymeant import MEANT
+from ryokai import MEANT
 
 meant = MEANT(lang="en")
 
@@ -78,8 +83,8 @@ Skip SRL entirely and score by word alignment + embedding similarity. Four align
 For a no-GPU / no-forward-pass static backend (`fastText`-style):
 
 ```python
-from pymeant import MEANT, StaticEmbeddingSimBackend
-from pymeant.scorer import score_nosrl
+from ryokai import MEANT, StaticEmbeddingSimBackend
+from ryokai.scorer import score_nosrl
 
 # uses only XLM-R's input embedding layer — no transformer forward pass
 score_nosrl(ref, hyp, aligner="itermax",
@@ -103,7 +108,7 @@ MEANT(lang="en", use_srl=False, aligner="itermax",
 
 Extra flags for all no-SRL modes:
 
-- `content_only=True` — drop stopwords + punctuation before alignment (Sultan et al. / WOLVESAAR `prop_harmonic` feature). Per-language stopwords bundled for all 13 MEANT languages in `pymeant/data/stopwords.yaml`.
+- `content_only=True` — drop stopwords + punctuation before alignment (Sultan et al. / WOLVESAAR `prop_harmonic` feature). Per-language stopwords bundled for all 13 MEANT languages in `ryokai/data/stopwords.yaml`.
 - `aggregation="harmonic"` — explicitly request the WOLVESAAR harmonic mean of per-sentence aligned-content-word proportions (mathematically the same as F1, name kept for clarity).
 - `threshold=0.5` — drop alignments with cosine below this (contextual aligners only).
 - `exact_match_shortcut=True` — case-insensitive surface-form equality boosts a pair's similarity to 1.0 (contextual aligners only). This is Sultan et al.'s "lexical prior" cascade in modern dress.
@@ -113,8 +118,8 @@ Extra flags for all no-SRL modes:
 Both backends (`EmbeddingSimBackend` for sentence/argument similarity, `ContextualTokenSimBackend` for word alignment) accept any HuggingFace model id, plus a handful of shorthand presets for popular modern choices:
 
 ```python
-from pymeant import MEANT, EmbeddingSimBackend
-from pymeant.sim.contextual import ContextualTokenSimBackend
+from ryokai import MEANT, EmbeddingSimBackend
+from ryokai.sim.contextual import ContextualTokenSimBackend
 
 # Upgrade the sentence-level backbone (used for predicate / arg similarity)
 meant = MEANT(
@@ -123,12 +128,12 @@ meant = MEANT(
 )
 
 # Upgrade the contextual word aligner backbone (used by aligner=hungarian/argmax/itermax)
-from pymeant.scorer import score_nosrl
+from ryokai.scorer import score_nosrl
 score_nosrl(
     reference, hypothesis,
     aligner="itermax",
     # ContextualTokenSimBackend is instantiated internally — pass a custom one via:
-    # pymeant.sim.contextual.ContextualTokenSimBackend(model_id="qwen3-0.6b")
+    # ryokai.sim.contextual.ContextualTokenSimBackend(model_id="qwen3-0.6b")
 )
 ```
 
@@ -159,7 +164,7 @@ Any non-preset string is passed straight through to `transformers.AutoModel` / `
 ### SimAlign-inspired extras on the contextual backend
 
 ```python
-from pymeant.sim.contextual import ContextualTokenSimBackend
+from ryokai.sim.contextual import ContextualTokenSimBackend
 
 # pick a middle layer (SimAlign found layer 8 of mBERT-base / XLM-R-base
 # beats the last layer for word alignment)
@@ -173,11 +178,11 @@ These plug into any of the `aligner="hungarian"/"argmax"/"itermax"/"mai"` modes 
 
 ## Evaluating the aligners themselves (AER)
 
-For benchmarking pymeant's aligners against a gold word-alignment dataset (WPT, Hansards, Europarl, etc.), `pymeant.eval` exposes the standard Och & Ney (2003) AER metric and convenience helpers:
+For benchmarking ryokai's aligners against a gold word-alignment dataset (WPT, Hansards, Europarl, etc.), `ryokai.eval` exposes the standard Och & Ney (2003) AER metric and convenience helpers:
 
 ```python
-from pymeant import ContextualTokenSimBackend
-from pymeant.eval import aer, evaluate_aligner
+from ryokai import ContextualTokenSimBackend
+from ryokai.eval import aer, evaluate_aligner
 
 # Single-pair AER
 predicted = [(0, 0, 0.9), (1, 1, 0.85)]   # (i, j, similarity) tuples are OK
@@ -218,16 +223,16 @@ meant.score_xlingual(
 ## CLI
 
 ```bash
-pymeant --ref ref.txt --hyp hyp.txt --lang en
+ryokai --ref ref.txt --hyp hyp.txt --lang en
 # MEANT = 0.71  (n=2000)
 
-pymeant --ref ref.txt --hyp hyp.txt --lang en --no-corpus-avg > per_sentence.f1
+ryokai --ref ref.txt --hyp hyp.txt --lang en --no-corpus-avg > per_sentence.f1
 ```
 
 ## Architecture
 
 ```
-pymeant/
+ryokai/
 ├── __init__.py             # MEANT facade + score_xlingual()
 ├── labelconfig.py          # load + apply role aliasing
 ├── data/labelconfig.yaml   # ported from meant.labelconfig
@@ -248,7 +253,7 @@ The **default SRL backend** (`HFPOSHeuristicSRLBackend`) is intentionally shallo
 For PropBank-grade SRL on a specific language, plug in a real SRL model:
 
 ```python
-from pymeant import MEANT, HFTokenClassifierSRLBackend
+from ryokai import MEANT, HFTokenClassifierSRLBackend
 
 meant = MEANT(
     lang="en",
@@ -276,7 +281,7 @@ pytest -m slow           # 53 tests, all 13 langs × MEANT, no-SRL, and an XMEAN
 
 ## Citations
 
-If you use pymeant in research, please cite the original metric papers alongside this port:
+If you use ryokai in research, please cite the original metric papers alongside this port:
 
 ```bibtex
 @inproceedings{lo-wu-2011-meant,

@@ -1,5 +1,5 @@
 """Unit tests for the AER / precision / recall / F1 word-alignment metrics."""
-from pymeant.eval import aer, f1, precision, recall
+from ryokai.eval import aer, f1, precision, recall
 
 
 def test_aer_perfect_match_is_zero():
@@ -32,8 +32,8 @@ def test_aer_both_empty_is_zero():
     assert aer(set(), set()) == 0.0
 
 
-def test_aer_accepts_3tuples_from_pymeant_aligners():
-    """pymeant aligners return (i, j, similarity); AER should accept those."""
+def test_aer_accepts_3tuples_from_ryokai_aligners():
+    """ryokai aligners return (i, j, similarity); AER should accept those."""
     pairs_with_scores = [(0, 0, 0.9), (1, 1, 0.85)]
     S = {(0, 0), (1, 1)}
     assert aer(pairs_with_scores, S) == 0.0
@@ -55,7 +55,7 @@ def test_evaluate_aligner_returns_aggregate():
             n = min(len(ref.split()), len(hyp.split()))
             return [(i, i, 1.0) for i in range(n)], ref.split(), hyp.split()
 
-    from pymeant.eval import evaluate_aligner
+    from ryokai.eval import evaluate_aligner
     res = evaluate_aligner(
         _StubAligner(),
         [

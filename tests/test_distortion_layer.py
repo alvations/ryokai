@@ -1,6 +1,6 @@
 """Unit tests for the SimAlign-inspired layer-selection and distortion-filter
 options on ContextualTokenSimBackend. No network — uses the constructor only."""
-from pymeant.sim.contextual import ContextualTokenSimBackend
+from ryokai.sim.contextual import ContextualTokenSimBackend
 
 
 def test_default_layer_is_minus_one():

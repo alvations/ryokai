@@ -1,5 +1,5 @@
 """Pure-Python tests: no model downloads, fast."""
-from pymeant.labelconfig import LabelConfig
+from ryokai.labelconfig import LabelConfig
 
 
 def test_canonical_propbank_args():

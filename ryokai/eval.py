@@ -1,6 +1,6 @@
 """Alignment-evaluation utilities (AER and friends).
 
-For benchmarking pymeant's word aligners against a gold word-alignment
+For benchmarking ryokai's word aligners against a gold word-alignment
 dataset (WPT, Hansards, Europarl etc.) using the standard
 Alignment-Error-Rate metric of Och & Ney (2003).
 
@@ -14,7 +14,7 @@ For a system alignment A, AER is:
 
 Lower is better; AER = 0 means A == S exactly.
 
-Also provided: a small helper to sweep pymeant's aligners over a list
+Also provided: a small helper to sweep ryokai's aligners over a list
 of (ref, hyp, gold) examples and report AER per aligner.
 """
 from __future__ import annotations

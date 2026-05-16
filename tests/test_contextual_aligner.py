@@ -3,7 +3,7 @@
 Marked `slow` because the first call downloads XLM-R (~1.1 GB)."""
 import pytest
 
-from pymeant import MEANT
+from ryokai import MEANT
 
 
 @pytest.mark.slow

@@ -6,7 +6,7 @@ embedding model). Run with: `pytest -m slow`.
 """
 import pytest
 
-from pymeant import MEANT, SUPPORTED_LANGS
+from ryokai import MEANT, SUPPORTED_LANGS
 
 
 # (lang, reference, near-paraphrase, unrelated)
