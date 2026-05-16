@@ -73,15 +73,37 @@ def _load_pos_pipeline(model_id: str):
 
 
 def _tokens_with_pos(sentence: str, model_id: str) -> list[tuple[str, str]]:
-    """Run POS tagger and return [(word, upos), ...]."""
+    """Run POS tagger and return [(word, upos), ...].
+
+    Two subword-merging strategies depending on the script:
+
+    * **Space-separated** (Latin / Cyrillic / Greek / Devanagari etc.):
+      the XLM-R "▁" prefix marks a word-initial subword; merge until the
+      next "▁". This is the standard SentencePiece convention.
+
+    * **CJK / no-whitespace scripts** (Japanese, Chinese, Korean, Thai…):
+      "▁" prefixes are rare and would cause every subword to merge into
+      one "word". Detect by `' ' not in sentence` and emit each subword
+      as its own token, picking up its POS tag directly.
+    """
     pipe = _load_pos_pipeline(model_id)
     raw = pipe(sentence)
+    is_cjk = " " not in sentence.strip()
+
     out: list[tuple[str, str]] = []
+    if is_cjk:
+        for tok in raw:
+            word = tok.get("word", "").lstrip("▁")
+            if not word:
+                continue
+            pos = tok.get("entity", tok.get("entity_group", "X"))
+            out.append((word, pos))
+        return out
+
     cur_word, cur_pos = "", ""
     for tok in raw:
         word = tok.get("word", "")
         pos = tok.get("entity", tok.get("entity_group", "X"))
-        # XLM-R subwords start with ▁ — concatenate continuations
         if word.startswith("▁"):
             if cur_word:
                 out.append((cur_word, cur_pos))
