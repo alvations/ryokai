@@ -28,19 +28,42 @@ import numpy as np
 
 DEFAULT_CTX_MODEL = "xlm-roberta-base"
 
+CTX_PRESETS: dict[str, str] = {
+    # 2018-2020 baselines (proven for word alignment per the SimAlign paper)
+    "mbert":        "bert-base-multilingual-cased",
+    "xlm-r-base":   "xlm-roberta-base",
+    "xlm-r-large":  "xlm-roberta-large",
+    "mdeberta-v3":  "microsoft/mdeberta-v3-base",
+    # 2024-2025 contextual encoders
+    "bge-m3":             "BAAI/bge-m3",
+    "snowflake-arctic-v2": "Snowflake/snowflake-arctic-embed-l-v2.0",
+    "jina-v2-base":       "jinaai/jina-embeddings-v2-base-en",
+    "jina-v3":            "jinaai/jina-embeddings-v3",
+    # 2025 — Qwen3 (decoder, last hidden state per token)
+    "qwen3-0.6b":   "Qwen/Qwen3-Embedding-0.6B",
+    "qwen3-4b":     "Qwen/Qwen3-Embedding-4B",
+    "qwen3-8b":     "Qwen/Qwen3-Embedding-8B",
+    # 2025 — NVIDIA Llama-Embed-Nemotron-8B (#1 MMTEB Oct 2025)
+    "nemotron-8b":  "nvidia/llama-embed-nemotron-8b",
+    "embedding-gemma": "google/embeddinggemma-300m",
+}
+
 
 @lru_cache(maxsize=4)
 def _load(model_id: str):
     import torch
     from transformers import AutoModel, AutoTokenizer
-    tok = AutoTokenizer.from_pretrained(model_id)
-    mdl = AutoModel.from_pretrained(model_id)
+    tok = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+    mdl = AutoModel.from_pretrained(model_id, trust_remote_code=True, output_hidden_states=True)
     mdl.eval()
     return tok, mdl, torch
 
 
-def _embed_words(sentence: str, model_id: str):
-    """Encode `sentence` with XLM-R, mean-pool subwords back to whole words.
+def _embed_words(sentence: str, model_id: str, layer: int = -1):
+    """Encode `sentence` with the chosen transformer, mean-pool subwords
+    back to whole words. `layer` selects which hidden-state layer to use
+    (-1 = last; SimAlign found middle layers, e.g. 8 for mBERT-base, work
+    better for word alignment).
 
     Returns (words: list[str], vecs: np.ndarray shape (n_words, hidden))."""
     tok, mdl, torch = _load(model_id)
@@ -52,7 +75,18 @@ def _embed_words(sentence: str, model_id: str):
     )
     offsets = enc.pop("offset_mapping")[0].tolist()
     with torch.no_grad():
-        out = mdl(**enc).last_hidden_state[0]   # (seq_len, hidden)
+        outputs = mdl(**enc)
+    if layer == -1:
+        out = outputs.last_hidden_state[0]
+    else:
+        # hidden_states is a tuple of (n_layers+1) tensors, embedding + each layer
+        hs = getattr(outputs, "hidden_states", None)
+        if hs is None:
+            raise RuntimeError(
+                f"model {model_id!r} did not return hidden_states; "
+                "cannot select a non-final layer"
+            )
+        out = hs[layer][0]   # (seq_len, hidden)
 
     # group subword tokens that share a word boundary in the original sentence
     words: list[str] = []
@@ -98,8 +132,24 @@ class ContextualTokenSimBackend:
         - threshold below which a pair is *not* considered aligned.
     """
 
-    def __init__(self, model_id: str = DEFAULT_CTX_MODEL) -> None:
-        self.model_id = model_id
+    def __init__(
+        self,
+        model_id: str = DEFAULT_CTX_MODEL,
+        layer: int = -1,
+        max_distortion: int | None = None,
+    ) -> None:
+        """`model_id` is an HF repo id or a key from `CTX_PRESETS`.
+
+        `layer` picks which hidden layer to use for token vectors (-1 = last).
+        SimAlign found middle layers (e.g. 8 for mBERT-base, 8 for XLM-R-base)
+        give better word alignment than the last layer.
+
+        `max_distortion` drops aligned pairs whose 0..1-normalised position
+        differs by more than this fraction (e.g. 0.4 drops alignments where
+        word i in ref is far from its aligned hyp word). None = no filter."""
+        self.model_id = CTX_PRESETS.get(model_id, model_id)
+        self.layer = layer
+        self.max_distortion = max_distortion
 
     def align(
         self,
@@ -126,8 +176,8 @@ class ContextualTokenSimBackend:
         if method not in ("hungarian", "argmax", "itermax"):
             raise ValueError(f"unknown align method {method!r}")
 
-        ref_words, ref_vecs = _embed_words(ref, self.model_id)
-        hyp_words, hyp_vecs = _embed_words(hyp, self.model_id)
+        ref_words, ref_vecs = _embed_words(ref, self.model_id, self.layer)
+        hyp_words, hyp_vecs = _embed_words(hyp, self.model_id, self.layer)
         if not ref_words or not hyp_words:
             return [], ref_words, hyp_words
 
@@ -162,6 +212,16 @@ class ContextualTokenSimBackend:
                     pairs.append((i, int(j), float(sim[i, j])))
         else:  # itermax
             pairs = _itermax(sim, threshold=threshold)
+
+        # SimAlign-style distortion filter: optionally drop alignments that
+        # are very far apart in normalised position.
+        if self.max_distortion is not None and pairs:
+            n_ref, n_hyp = len(ref_words), len(hyp_words)
+            pairs = [
+                (i, j, s)
+                for i, j, s in pairs
+                if abs(i / max(n_ref - 1, 1) - j / max(n_hyp - 1, 1)) <= self.max_distortion
+            ]
         return pairs, ref_words, hyp_words
 
 

@@ -93,6 +93,69 @@ Extra flags for all no-SRL modes:
 - `threshold=0.5` — drop alignments with cosine below this (contextual aligners only).
 - `exact_match_shortcut=True` — case-insensitive surface-form equality boosts a pair's similarity to 1.0 (contextual aligners only). This is Sultan et al.'s "lexical prior" cascade in modern dress.
 
+## Swapping the embedding backbone
+
+Both backends (`EmbeddingSimBackend` for sentence/argument similarity, `ContextualTokenSimBackend` for word alignment) accept any HuggingFace model id, plus a handful of shorthand presets for popular modern choices:
+
+```python
+from pymeant import MEANT, EmbeddingSimBackend
+from pymeant.sim.contextual import ContextualTokenSimBackend
+
+# Upgrade the sentence-level backbone (used for predicate / arg similarity)
+meant = MEANT(
+    lang="en",
+    sim_backend=EmbeddingSimBackend("qwen3-0.6b"),       # or "jina-v3", "mpnet", or any HF id
+)
+
+# Upgrade the contextual word aligner backbone (used by aligner=hungarian/argmax/itermax)
+from pymeant.scorer import score_nosrl
+score_nosrl(
+    reference, hypothesis,
+    aligner="itermax",
+    # ContextualTokenSimBackend is instantiated internally — pass a custom one via:
+    # pymeant.sim.contextual.ContextualTokenSimBackend(model_id="qwen3-0.6b")
+)
+```
+
+| Preset key            | Model                                                       | Year  | Backend |
+| --------------------- | ----------------------------------------------------------- | ----- | ------- |
+| `minilm`              | sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 | 2021  | sentence (default) |
+| `mpnet`               | sentence-transformers/paraphrase-multilingual-mpnet-base-v2 | 2021  | sentence |
+| `mbert`               | bert-base-multilingual-cased                                | 2019  | contextual |
+| `xlm-r-base`          | xlm-roberta-base                                            | 2020  | contextual (default) |
+| `xlm-r-large`         | xlm-roberta-large                                           | 2020  | contextual |
+| `mdeberta-v3`         | microsoft/mdeberta-v3-base                                  | 2022  | contextual |
+| `me5-large`           | intfloat/multilingual-e5-large                              | 2024  | sentence |
+| `me5-large-instruct`  | intfloat/multilingual-e5-large-instruct                     | 2024  | sentence |
+| `bge-m3`              | BAAI/bge-m3                                                 | 2024  | sentence + contextual |
+| `mxbai-large`         | mixedbread-ai/mxbai-embed-large-v1                          | 2024  | sentence |
+| `snowflake-arctic-v2` | Snowflake/snowflake-arctic-embed-l-v2.0                     | 2024  | sentence + contextual |
+| `nomic-v2`            | nomic-ai/nomic-embed-text-v2-moe                            | 2025  | sentence |
+| `jina-v2-base`        | jinaai/jina-embeddings-v2-base-en                           | 2023  | sentence + contextual |
+| `jina-v3`             | jinaai/jina-embeddings-v3                                   | 2024  | sentence + contextual |
+| `embedding-gemma`     | google/embeddinggemma-300m                                  | 2025  | sentence + contextual |
+| **`qwen3-0.6b`**      | Qwen/Qwen3-Embedding-0.6B                                   | **2025** | sentence + contextual |
+| `qwen3-4b`            | Qwen/Qwen3-Embedding-4B                                     | 2025  | sentence + contextual |
+| `qwen3-8b`            | Qwen/Qwen3-Embedding-8B                                     | 2025  | sentence + contextual |
+| **`nemotron-8b`**     | nvidia/llama-embed-nemotron-8b                              | **2025** (#1 MMTEB Oct 2025) | sentence + contextual |
+
+Any non-preset string is passed straight through to `transformers.AutoModel` / `sentence_transformers.SentenceTransformer` (with `trust_remote_code=True` so models like Jina v3 / Nomic v2 that ship custom code work out of the box).
+
+### SimAlign-inspired extras on the contextual backend
+
+```python
+from pymeant.sim.contextual import ContextualTokenSimBackend
+
+# pick a middle layer (SimAlign found layer 8 of mBERT-base / XLM-R-base
+# beats the last layer for word alignment)
+be = ContextualTokenSimBackend("xlm-r-base", layer=8)
+
+# drop alignments where word positions differ by more than 30% of sentence length
+be = ContextualTokenSimBackend("qwen3-0.6b", max_distortion=0.3)
+```
+
+These plug into any of the `aligner="hungarian"/"argmax"/"itermax"` modes via the backend you pass in.
+
 ### Reference-free (XMEANT / YiSi-2 style)
 
 Score MT directly against the **source** sentence, no reference needed. Works because the embedding backbone is multilingual.
