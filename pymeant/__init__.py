@@ -80,6 +80,11 @@ class MEANT:
         sim_backend: EmbeddingSimBackend | None = None,
         weights: dict[str, float] | None = None,
         label_config: LabelConfig | None = None,
+        content_only: bool = False,
+        aggregation: str = "f1",
+        aligner: str = "sentence",
+        threshold: float = 0.5,
+        exact_match_shortcut: bool = True,
     ) -> None:
         if lang not in SUPPORTED_LANGS:
             raise ValueError(
@@ -92,6 +97,11 @@ class MEANT:
         self.sim = sim_backend or EmbeddingSimBackend()
         self.weights = weights or DEFAULT_WEIGHTS
         self.label_config = label_config or LabelConfig()
+        self.content_only = content_only
+        self.aggregation = aggregation
+        self.aligner = aligner
+        self.threshold = threshold
+        self.exact_match_shortcut = exact_match_shortcut
 
     def parse(self, sentence: str, lang: str | None = None) -> SRLGraph:
         """Run SRL on one sentence. `lang` defaults to `self.lang`."""
@@ -102,7 +112,17 @@ class MEANT:
     def score(self, reference: str, hypothesis: str) -> MEANTScore:
         """Score a single ref/hyp MT pair. Higher = more adequate."""
         if not self.use_srl:
-            return score_nosrl(reference, hypothesis, self.sim)
+            return score_nosrl(
+                reference,
+                hypothesis,
+                self.sim,
+                lang=self.lang,
+                content_only=self.content_only,
+                aggregation=self.aggregation,
+                aligner=self.aligner,
+                threshold=self.threshold,
+                exact_match_shortcut=self.exact_match_shortcut,
+            )
         ref = self.parse(reference)
         hyp = self.parse(hypothesis)
         return score_pair(ref, hyp, self.sim, self.weights, self.label_config)
@@ -140,7 +160,17 @@ class MEANT:
                 f"Supported: {sorted(SUPPORTED_LANGS)}"
             )
         if not self.use_srl:
-            return score_nosrl(source, hypothesis, self.sim)
+            return score_nosrl(
+                source,
+                hypothesis,
+                self.sim,
+                lang=source_lang,
+                content_only=self.content_only,
+                aggregation=self.aggregation,
+                aligner=self.aligner,
+                threshold=self.threshold,
+                exact_match_shortcut=self.exact_match_shortcut,
+            )
         src_graph = self.parse(source, lang=source_lang)
         hyp_graph = self.parse(hypothesis)
         return score_pair(

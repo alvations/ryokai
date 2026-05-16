@@ -171,31 +171,131 @@ def score_pair(
 def score_nosrl(
     reference: str,
     hypothesis: str,
-    sim_backend: EmbeddingSimBackend | None = None,
+    sim_backend=None,
+    *,
+    lang: str = "en",
+    content_only: bool = False,
+    aggregation: str = "f1",
+    aligner: str = "sentence",
+    threshold: float = 0.5,
+    exact_match_shortcut: bool = True,
 ) -> MEANTScore:
-    """No-SRL MEANT — YiSi-1 style.
+    """No-SRL MEANT — YiSi-1 / WOLVESAAR-style.
 
-    Bypasses the SRL graph entirely: token-level Hungarian matching of
-    reference vs hypothesis words by embedding cosine, then F-score.
-    Useful when SRL is unreliable or unavailable for the target language.
+    Bypasses the SRL graph: align reference and hypothesis tokens
+    one-to-one and compute F-score (or WOLVESAAR harmonic mean) over the
+    aligned-token proportions.
+
+    Two aligners are available:
+
+    `aligner="sentence"` (default, fast)
+        Uses the sentence-level multilingual MiniLM to embed every
+        whitespace token in isolation and Hungarian-match by cosine.
+        Cheap, no extra model download, but token vectors are *not* in
+        context — single-token "sentences" lose the surrounding cues
+        that make word alignment work in Sultan et al. (2014).
+
+    `aligner="hungarian"` | `"argmax"` | `"itermax"` (contextual)
+        Uses XLM-RoBERTa contextual hidden states (`xlm-roberta-base`,
+        ~1.1 GB), mean-pools subwords back to whole words, with three
+        matching strategies:
+            - `"hungarian"` — strict 1-to-1 (Sultan et al. style)
+            - `"argmax"`    — SimAlign Inter; bidirectional argmax
+                             intersection, allows many-to-many when
+                             both directions agree
+            - `"itermax"`   — SimAlign IterMax (recommended); argmax
+                             intersection seed + iterative growth,
+                             highest recall
+        All three apply a Sultan-style exact-match prior (case-insensitive
+        surface match boosts a pair to similarity 1.0).
+
+    Parameters
+    ----------
+    reference, hypothesis : str
+        The two sentences to compare.
+    sim_backend : EmbeddingSimBackend | None
+        Only used when `aligner="sentence"`. Defaults to multilingual MiniLM.
+    lang : str
+        Language for content-word filtering (only used if `content_only`).
+    content_only : bool
+        If True (WOLVESAAR / Sultan et al. style), drop stopwords + punctuation
+        before alignment. Default False.
+    aggregation : str
+        `"f1"` (default) or `"harmonic"`. Both reduce to the same formula
+        2·p·r/(p+r) — separate name kept so callers can be explicit about intent.
+    aligner : str
+        `"sentence"` (default, fast) or one of the contextual variants
+        `"hungarian"` / `"argmax"` / `"itermax"`. `"itermax"` is the
+        SimAlign-recommended best-quality option.
+    threshold : float
+        Used by `aligner="contextual"`: alignment cosine floor. Default 0.5.
+    exact_match_shortcut : bool
+        Used by `aligner="contextual"`: case-insensitive surface-form equality
+        boosts the pair's similarity to 1.0, matching Sultan et al.'s
+        lexical-prior cascade. Default True.
     """
-    sim = sim_backend or EmbeddingSimBackend()
-    ref_tokens = reference.split()
-    hyp_tokens = hypothesis.split()
-    if not ref_tokens and not hyp_tokens:
-        return MEANTScore(1.0, 1.0, 1.0, 0, 0, 0)
-    if not ref_tokens or not hyp_tokens:
-        return MEANTScore(0.0, 0.0, 0.0, 0, 0, 0)
-    s = sim.sim(ref_tokens, hyp_tokens)
-    from .match import max_match
-    _, matched = max_match(s)
-    precision = matched / len(hyp_tokens)
-    recall = matched / len(ref_tokens)
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    if aggregation not in ("f1", "harmonic"):
+        raise ValueError(f"aggregation must be 'f1' or 'harmonic', got {aggregation!r}")
+    contextual_methods = {"hungarian", "argmax", "itermax"}
+    if aligner not in ({"sentence"} | contextual_methods):
+        raise ValueError(
+            f"aligner must be 'sentence' or one of {sorted(contextual_methods)}, "
+            f"got {aligner!r}"
+        )
+
+    if aligner in contextual_methods:
+        from .sim.contextual import ContextualTokenSimBackend
+        from .stopwords import is_content_token
+        ctx = ContextualTokenSimBackend()
+        pairs, ref_words, hyp_words = ctx.align(
+            reference,
+            hypothesis,
+            method=aligner,
+            threshold=threshold,
+            exact_match_shortcut=exact_match_shortcut,
+        )
+        # filter words + pairs by content-word predicate if requested
+        if content_only:
+            ref_keep = {i for i, w in enumerate(ref_words) if is_content_token(w, lang)}
+            hyp_keep = {j for j, w in enumerate(hyp_words) if is_content_token(w, lang)}
+            ref_words = [w for i, w in enumerate(ref_words) if i in ref_keep]
+            hyp_words = [w for j, w in enumerate(hyp_words) if j in hyp_keep]
+            pairs = [(i, j, s) for i, j, s in pairs if i in ref_keep and j in hyp_keep]
+        n_ref, n_hyp = len(ref_words), len(hyp_words)
+        if n_ref == 0 and n_hyp == 0:
+            return MEANTScore(1.0, 1.0, 1.0, 0, 0, 0)
+        if n_ref == 0 or n_hyp == 0:
+            return MEANTScore(0.0, 0.0, 0.0, 0, 0, 0)
+        matched_sum = sum(s for _, _, s in pairs)
+        precision = matched_sum / n_hyp
+        recall = matched_sum / n_ref
+
+    else:  # aligner == "sentence"
+        sim = sim_backend or EmbeddingSimBackend()
+        ref_tokens = reference.split()
+        hyp_tokens = hypothesis.split()
+        if content_only:
+            from .stopwords import is_content_token
+            ref_tokens = [t for t in ref_tokens if is_content_token(t, lang)]
+            hyp_tokens = [t for t in hyp_tokens if is_content_token(t, lang)]
+        if not ref_tokens and not hyp_tokens:
+            return MEANTScore(1.0, 1.0, 1.0, 0, 0, 0)
+        if not ref_tokens or not hyp_tokens:
+            return MEANTScore(0.0, 0.0, 0.0, 0, 0, 0)
+        s = sim.sim(ref_tokens, hyp_tokens)
+        from .match import max_match
+        _, matched_sum = max_match(s)
+        precision = matched_sum / len(hyp_tokens)
+        recall = matched_sum / len(ref_tokens)
+
+    combined = (
+        2 * precision * recall / (precision + recall)
+        if (precision + recall) else 0.0
+    )
     return MEANTScore(
         precision=float(np.clip(precision, 0.0, 1.0)),
         recall=float(np.clip(recall, 0.0, 1.0)),
-        f1=float(np.clip(f1, 0.0, 1.0)),
+        f1=float(np.clip(combined, 0.0, 1.0)),
         n_frames_ref=0,
         n_frames_hyp=0,
         n_aligned_predicates=0,

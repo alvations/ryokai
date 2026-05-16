@@ -1,5 +1,6 @@
-"""Tests for the YiSi-1-style no-SRL fallback scorer."""
+"""Tests for the YiSi-1 / WOLVESAAR-style no-SRL fallback scorer."""
 import numpy as np
+import pytest
 
 from pymeant.scorer import score_nosrl
 
@@ -48,3 +49,47 @@ def test_extra_hyp_tokens_drops_precision():
     s_extra = score_nosrl("a b", "a b c d", sim_backend=_IdentitySim())
     assert s_extra.precision < s_baseline.precision
     assert s_extra.recall == s_baseline.recall
+
+
+def test_content_only_drops_stopwords():
+    # With content_only=False, "the the the cat" has 4 tokens
+    # With content_only=True, only "cat" remains
+    s_with_stop = score_nosrl(
+        "the the the cat", "a a a dog",
+        sim_backend=_IdentitySim(),
+        content_only=False, lang="en",
+    )
+    s_no_stop = score_nosrl(
+        "the the the cat", "a a a dog",
+        sim_backend=_IdentitySim(),
+        content_only=True, lang="en",
+    )
+    # without stop filter: 0 of 4 align (cat != dog)
+    assert s_with_stop.f1 == 0.0
+    # with stop filter: cat vs dog -> still 0 align, but we computed on content words only
+    assert s_no_stop.f1 == 0.0
+    # different test: identical content words but different stopwords
+    s = score_nosrl(
+        "the cat", "a cat",
+        sim_backend=_IdentitySim(),
+        content_only=True, lang="en",
+    )
+    assert s.f1 == 1.0  # both reduce to just "cat"
+
+
+def test_aggregation_harmonic_equals_f1_mathematically():
+    s_f1 = score_nosrl("the cat sat", "the dog sat",
+                       sim_backend=_IdentitySim(), aggregation="f1")
+    s_h = score_nosrl("the cat sat", "the dog sat",
+                      sim_backend=_IdentitySim(), aggregation="harmonic")
+    assert abs(s_f1.f1 - s_h.f1) < 1e-9
+
+
+def test_invalid_aggregation_raises():
+    with pytest.raises(ValueError):
+        score_nosrl("a", "b", sim_backend=_IdentitySim(), aggregation="bogus")
+
+
+def test_invalid_aligner_raises():
+    with pytest.raises(ValueError):
+        score_nosrl("a", "b", sim_backend=_IdentitySim(), aligner="bogus")

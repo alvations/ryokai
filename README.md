@@ -63,13 +63,35 @@ MEANT("hi").score("बिल्ली चटाई पर बैठी।", "ए
 MEANT(lang="en").score(reference, hypothesis)
 ```
 
-### No-SRL fallback (YiSi-1 style)
+### No-SRL fallback (YiSi-1 / WOLVESAAR / SimAlign style)
 
-Skip SRL entirely — token-level Hungarian alignment with embedding cosine. Faster and downloads fewer models; comparable to YiSi-1.
+Skip SRL entirely and score by word alignment + embedding similarity. Four aligners are available, trading off speed vs. faithfulness to the literature:
+
+| `aligner=` | Backbone | Matching | Notes |
+| ---------- | -------- | -------- | ----- |
+| `"sentence"` *(default)* | multilingual MiniLM (already loaded) | Hungarian | Fast, no extra download. Tokens embedded out of context — coarse approximation. |
+| `"hungarian"` | XLM-RoBERTa contextual | scipy 1-to-1 Hungarian | Sultan et al. (2014) style: contextual vectors + exact-match prior + cosine threshold. |
+| `"argmax"`    | XLM-RoBERTa contextual | bidirectional argmax intersection | SimAlign Inter: each src picks best tgt; keep only mutual best. Allows many-to-many. |
+| `"itermax"`   | XLM-RoBERTa contextual | argmax intersection + iterative growth | SimAlign IterMax — **recommended quality**. Adds back unaligned words above the threshold. |
 
 ```python
-MEANT(lang="en", use_srl=False).score(reference, hypothesis)
+# Fast — no extra model download
+MEANT(lang="en", use_srl=False).score(ref, hyp)
+
+# Sultan et al. style: contextual encoder + threshold + exact-match prior
+MEANT(lang="en", use_srl=False, aligner="hungarian").score(ref, hyp)
+
+# SimAlign IterMax — best F1 in the SimAlign paper
+MEANT(lang="en", use_srl=False, aligner="itermax",
+      content_only=True, threshold=0.5).score(ref, hyp)
 ```
+
+Extra flags for all no-SRL modes:
+
+- `content_only=True` — drop stopwords + punctuation before alignment (Sultan et al. / WOLVESAAR `prop_harmonic` feature). Per-language stopwords bundled for all 13 MEANT languages in `pymeant/data/stopwords.yaml`.
+- `aggregation="harmonic"` — explicitly request the WOLVESAAR harmonic mean of per-sentence aligned-content-word proportions (mathematically the same as F1, name kept for clarity).
+- `threshold=0.5` — drop alignments with cosine below this (contextual aligners only).
+- `exact_match_shortcut=True` — case-insensitive surface-form equality boosts a pair's similarity to 1.0 (contextual aligners only). This is Sultan et al.'s "lexical prior" cascade in modern dress.
 
 ### Reference-free (XMEANT / YiSi-2 style)
 
@@ -176,6 +198,33 @@ If you use pymeant in research, please cite the original metric papers alongside
   author    = {Lo, Chi-kiu},
   booktitle = {Proceedings of WMT},
   year      = {2019},
+}
+```
+
+The no-SRL aligners draw on:
+
+```bibtex
+@inproceedings{sultan-etal-2014-back,
+  title     = {Back to Basics for Monolingual Alignment: Exploiting Word Similarity and Contextual Evidence},
+  author    = {Sultan, Md Arafat and Bethard, Steven and Sumner, Tamara},
+  journal   = {Transactions of the Association for Computational Linguistics},
+  year      = {2014},
+}
+
+@inproceedings{bechara-etal-2016-wolvesaar,
+  title     = {{WOLVESAAR} at {S}em{E}val-2016 Task 1: Replicating the Success of Monolingual Word Alignment and Neural Embeddings for Semantic Textual Similarity},
+  author    = {Bechara, Hannah and Gupta, Rohit and Tan, Liling and Or{\u{a}}san, Constantin and Mitkov, Ruslan and van Genabith, Josef},
+  booktitle = {Proceedings of SemEval-2016},
+  pages     = {634--639},
+  year      = {2016},
+  url       = {https://aclanthology.org/S16-1096/},
+}
+
+@inproceedings{jalili-sabet-etal-2020-simalign,
+  title     = {{S}im{A}lign: High Quality Word Alignments without Parallel Training Data using Static and Contextualized Embeddings},
+  author    = {Jalili Sabet, Masoud and Dufter, Philipp and Yvon, Fran{\c{c}}ois and Sch{\"u}tze, Hinrich},
+  booktitle = {Findings of EMNLP 2020},
+  year      = {2020},
 }
 ```
 
