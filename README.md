@@ -52,14 +52,14 @@ Ryokai is glue around several published techniques — credit belongs to their a
 
 | Technique | Year | Citation | Category |
 | --------- | ---- | -------- | -------- |
-| MEANT                  | 2011 | [Lo & Wu — ACL 2011](https://aclanthology.org/P11-2042/)                                                        | Semantic-frame MT evaluation  |
-| XMEANT                 | 2014 | [Lo, Beloucif, Saers & Wu — ACL 2014](https://aclanthology.org/P14-2124/)                                       | Semantic-frame MT evaluation  |
-| MEANT 2.0              | 2017 | [Lo — WMT 2017](https://aclanthology.org/W17-4767/)                                                              | Semantic-frame MT evaluation  |
-| Doc-embedding adequacy | 2015 | [Vela & Tan — WMT 2015](https://aclanthology.org/W15-3051/)                                                      | Embedding-based MT evaluation |
-| WOLVESAAR              | 2016 | [Bechara, Gupta, Tan, Orăsan, Mitkov & van Genabith — SemEval 2016](https://aclanthology.org/S16-1096/)         | Embedding-based MT evaluation |
-| YiSi                   | 2019 | [Lo — WMT 2019](https://aclanthology.org/W19-5358/)                                                              | Embedding-based MT evaluation |
-| Monolingual aligner    | 2014 | [Sultan, Bethard & Sumner — TACL 2014](https://aclanthology.org/Q14-1018/)                                       | Word alignment                |
-| SimAlign               | 2020 | [Jalili Sabet, Dufter, Yvon & Schütze — Findings of EMNLP 2020](https://aclanthology.org/2020.findings-emnlp.147/) | Word alignment                |
+| MEANT                  | 2011 | Lo & Wu. [*MEANT: An inexpensive, high-accuracy, semi-automatic metric for evaluating translation utility based on semantic roles*](https://aclanthology.org/P11-2042/). ACL 2011. | Semantic-frame MT evaluation  |
+| XMEANT                 | 2014 | Lo, Beloucif, Saers & Wu. [*XMEANT: Better semantic MT evaluation without reference translations*](https://aclanthology.org/P14-2124/). ACL 2014 (Short Papers). | Semantic-frame MT evaluation  |
+| MEANT 2.0              | 2017 | Lo. [*MEANT 2.0: Accurate semantic MT evaluation for any output language*](https://aclanthology.org/W17-4767/). WMT 2017. | Semantic-frame MT evaluation  |
+| Doc-embedding adequacy | 2015 | Vela & Tan. [*Predicting Machine Translation Adequacy with Document Embeddings*](https://aclanthology.org/W15-3051/). WMT 2015. | Embedding-based MT evaluation |
+| WOLVESAAR              | 2016 | Bechara, Gupta, Tan, Orăsan, Mitkov & van Genabith. [*WOLVESAAR at SemEval-2016 Task 1: Replicating the Success of Monolingual Word Alignment and Neural Embeddings for Semantic Textual Similarity*](https://aclanthology.org/S16-1096/). SemEval-2016. | Embedding-based MT evaluation |
+| YiSi                   | 2019 | Lo. [*YiSi — a Unified Semantic MT Quality Evaluation and Estimation Metric for Languages with Different Levels of Available Resources*](https://aclanthology.org/W19-5358/). WMT 2019. | Embedding-based MT evaluation |
+| Monolingual aligner    | 2014 | Sultan, Bethard & Sumner. [*Back to Basics for Monolingual Alignment: Exploiting Word Similarity and Contextual Evidence*](https://aclanthology.org/Q14-1018/). TACL 2014. | Word alignment                |
+| SimAlign               | 2020 | Jalili Sabet, Dufter, Yvon & Schütze. [*SimAlign: High Quality Word Alignments without Parallel Training Data using Static and Contextualized Embeddings*](https://aclanthology.org/2020.findings-emnlp.147/). Findings of EMNLP 2020. | Word alignment                |
 
 ## License
 
