@@ -14,31 +14,50 @@ Detailed reference for the [ryokai](README.md) library. The short README has the
 
 ## Variants
 
-### Default — frame-based scoring (MEANT 2.0)
+Construct a `Ryokai()` once with the configuration you want, then call `.score(...)` with the arguments matching the mode you want. The dispatch is:
 
-Predicate-argument frames + Hungarian matching + weighted role F-score.
+| Pass `source=` | Pass `reference=` | `srl=` | Mode |
+| -------------- | ----------------- | ------ | ---- |
+| ✓ | — | False *(default)* | **Reference-free, word alignment + embedding** — Doc-embedding adequacy / YiSi-2 / XMEANT-lite |
+| — | ✓ | False *(default)* | **Reference-based, word alignment + embedding** — Doc-embedding adequacy / WOLVESAAR / YiSi-1 / SimAlign |
+| ✓ | — | True | **Reference-free, frame-based** — XMEANT proper |
+| — | ✓ | True | **Reference-based, frame-based** — MEANT 2.0 |
+
+`target_lang` is always required. `source_lang` defaults to `target_lang` if omitted (monolingual paraphrase scoring).
 
 ```python
 from ryokai import Ryokai
-Ryokai(lang="en").score(reference, hypothesis)
+scorer = Ryokai()
+src_lang, tgt_lang = "en", "ja"
+
+# Default mode (no SRL): reference-free
+scorer.score(source=src, hypothesis=hyp,
+             source_lang=src_lang, target_lang=tgt_lang)
+
+# Default mode (no SRL): reference-based
+scorer.score(reference=ref, hypothesis=hyp, target_lang=tgt_lang)
+
+# Frame-based: reference-free (XMEANT proper)
+scorer.score(source=src, hypothesis=hyp,
+             source_lang=src_lang, target_lang=tgt_lang, srl=True)
+
+# Frame-based: reference-based (MEANT 2.0)
+scorer.score(reference=ref, hypothesis=hyp, target_lang=tgt_lang, srl=True)
 ```
 
-### Reference-free (XMEANT / YiSi-2)
-
-Score MT directly against the **source** sentence — no reference needed. Works because the embedding backbone is multilingual.
+For corpora:
 
 ```python
-r = Ryokai(lang="zh")                            # MT output language
-r.score_xlingual(
-    source="The cat sat on the mat yesterday.",
-    hypothesis="猫昨天坐在垫子上。",
-    source_lang="en",
+scorer.score_corpus(
+    hypotheses=hyps, sources=srcs,
+    source_lang="en", target_lang="ja",
 )
+# -> list[Score]
 ```
 
-### No-SRL fallback (YiSi-1 / WOLVESAAR / SimAlign)
+### Aligner choice (no-SRL only)
 
-Skip SRL entirely and score by word alignment + embedding similarity. Five aligners are available, trading off speed for faithfulness to the literature:
+Five aligners are available, trading off speed for faithfulness to the literature:
 
 | `aligner=` | Backbone used | Matching | Notes |
 | ---------- | ------------- | -------- | ----- |
@@ -48,28 +67,24 @@ Skip SRL entirely and score by word alignment + embedding similarity. Five align
 | `"itermax"`  | contextual token encoder | argmax intersection + iterative growth | SimAlign IterMax — **recommended for quality**. Adds back unaligned words above the threshold. |
 | `"mai"`      | contextual token encoder | union of `hungarian` ∪ `argmax` ∪ `itermax` | SimAlign `mai` combinator — highest recall, useful as upper bound. |
 
+Set it on the constructor:
+
 ```python
-# Fast — uses the already-loaded MiniLM, no extra model download
-Ryokai(lang="en", use_srl=False).score(ref, hyp)
-
-# Sultan et al.: contextual encoder + threshold + exact-match prior
-Ryokai(lang="en", use_srl=False, aligner="hungarian").score(ref, hyp)
-
-# SimAlign IterMax — best F1 in the SimAlign paper
-Ryokai(lang="en", use_srl=False, aligner="itermax",
-       content_only=True, threshold=0.5).score(ref, hyp)
+Ryokai(aligner="itermax", content_only=True, threshold=0.5).score(
+    reference=ref, hypothesis=hyp, target_lang="en",
+)
 ```
 
-Extra flags for all no-SRL modes:
+Extra knobs available on the constructor for the no-SRL path:
 
 - `content_only=True` — drop stopwords + punctuation before alignment (Sultan et al. / WOLVESAAR `prop_harmonic` feature). Per-language stopwords bundled for all 13 languages in `ryokai/data/stopwords.yaml`.
-- `aggregation="harmonic"` — be explicit about the WOLVESAAR harmonic mean of per-sentence aligned-content-word proportions (mathematically the same as F1, the name is for clarity).
+- `aggregation="harmonic"` — explicit WOLVESAAR harmonic mean of per-sentence aligned-content-word proportions (mathematically the same as F1; the name is for clarity).
 - `threshold=0.5` — drop alignments with cosine below this (contextual aligners only).
 - `exact_match_shortcut=True` — case-insensitive surface equality boosts a pair's similarity to 1.0 (contextual aligners only). Sultan et al.'s "lexical prior" cascade in modern dress.
 
 ### No-GPU static backend
 
-For a no-forward-pass alternative (fastText-style):
+For a no-forward-pass alternative (fastText-style), drive `score_nosrl` directly with a `StaticEmbeddingSimBackend`:
 
 ```python
 from ryokai import StaticEmbeddingSimBackend
@@ -91,10 +106,10 @@ Both backends — `EmbeddingSimBackend` for sentence/argument similarity and `Co
 from ryokai import Ryokai, EmbeddingSimBackend
 
 # Upgrade the sentence-level backbone (predicate / argument similarity)
-Ryokai(
-    lang="en",
+scorer = Ryokai(
     sim_backend=EmbeddingSimBackend("qwen3-0.6b"),       # or "jina-v3", "nemotron-8b", or any HF id
 )
+scorer.score(reference=ref, hypothesis=hyp, target_lang="en")
 ```
 
 For the contextual word aligner backbone (used by `aligner="hungarian"/"argmax"/"itermax"/"mai"`), instantiate it explicitly and drive the aligner directly:
@@ -222,25 +237,24 @@ For PropBank-grade SRL on a specific language, plug in a real model:
 from ryokai import Ryokai, HFTokenClassifierSRLBackend
 
 Ryokai(
-    lang="en",
     srl_backend=HFTokenClassifierSRLBackend("liaad/srl-en_xlmr-base"),
-).score(ref, hyp)
+).score(reference=ref, hypothesis=hyp, target_lang="en", srl=True)
 ```
 
 ## Custom role weights
 
-`Ryokai(lang=…, weights={...})` accepts any `{role_class: float}` dict. Defaults give equal weight to V/A0/A1, 0.8 to A2/NEG, 0.6 to TMP/LOC, less to modifiers. Setting a weight to 0 ignores that role class entirely.
+`Ryokai(weights={...})` accepts any `{role_class: float}` dict. Defaults give equal weight to V/A0/A1, 0.8 to A2/NEG, 0.6 to TMP/LOC, less to modifiers. Setting a weight to 0 ignores that role class entirely. Only used when `srl=True` is passed to `.score()`.
 
 ## Running the tests
 
-Fast tests (label aliasing, scorer arithmetic, matching, presets, AER, stopwords) — no model downloads:
+Fast tests (label aliasing, scorer arithmetic, matching, presets, AER, stopwords, API dispatch) — no model downloads:
 
 ```bash
-pytest -m "not slow"     # 66 tests, < 5s
+pytest -m "not slow"     # 69 tests, < 5s
 ```
 
 Full end-to-end with model downloads (~1.2 GB on first run, then cached):
 
 ```bash
-pytest -m slow           # 62 tests across all 13 languages × every aligner
+pytest -m slow           # 78 tests across all 13 languages × every aligner × SRL on/off
 ```

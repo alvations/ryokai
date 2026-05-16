@@ -20,28 +20,39 @@ pip install ryokai
 ```python
 from ryokai import Ryokai
 
-r = Ryokai(lang="en")
-score = r.score(
-    reference="The cat sat on the mat yesterday.",
-    hypothesis="A cat was sitting on the mat yesterday.",
-)
-print(score)
-# Score(precision=0.74, recall=0.82, f1=0.78, ...)
+scorer = Ryokai()
+src_lang, tgt_lang = "en", "ja"
 
-float(score)   # 0.78  — convenient shortcut, returns f1
+# Most common: reference-free, word alignment + embedding
+# (XMEANT-lite / YiSi-2 / Doc-embedding adequacy cross-lingual)
+scorer.score(source=src, hypothesis=hyp,
+             source_lang=src_lang, target_lang=tgt_lang)
 ```
 
 ## Variants
 
+One `.score()` call, four modes, dispatched by which arguments you pass. `srl=False` is the default — `ryokai` is no longer MEANT-first.
+
 ```python
-# 1. Frame-based MEANT 2.0 (default)
-Ryokai(lang).score(ref, hyp)
+from ryokai import Ryokai
+scorer = Ryokai()
+src_lang, tgt_lang = "en", "ja"
 
-# 2. Reference-free XMEANT / YiSi-2 — score MT vs source, no reference
-Ryokai(lang).score_xlingual(src, hyp, source_lang)
+# Reference-free, word alignment + embedding (default, most common)
+# E.g. Doc-embedding adequacy / YiSi-2 / XMEANT-lite
+scorer.score(source=src, hypothesis=hyp,
+             source_lang=src_lang, target_lang=tgt_lang)
 
-# 3. No-SRL YiSi-1 / WOLVESAAR / SimAlign — word alignment + embedding F-score
-Ryokai(lang, use_srl=False, aligner="itermax").score(ref, hyp)
+# Reference-based, word alignment + embedding
+# E.g. Doc-embedding adequacy / WOLVESAAR / YiSi-1 / SimAlign style
+scorer.score(reference=ref, hypothesis=hyp, target_lang=tgt_lang)
+
+# Reference-free, frame-based — XMEANT proper
+scorer.score(source=src, hypothesis=hyp,
+             source_lang=src_lang, target_lang=tgt_lang, srl=True)
+
+# Reference-based, frame-based — MEANT 2.0
+scorer.score(reference=ref, hypothesis=hyp, target_lang=tgt_lang, srl=True)
 ```
 
 See [`DOCUMENTATION.md`](DOCUMENTATION.md) for flags, aligner choices, embedding-backbone swaps, AER evaluation harness, CLI, architecture, and custom role weights.

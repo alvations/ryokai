@@ -1,25 +1,28 @@
 """ryokai — 了解.
 
-Unified semantic machine-translation evaluation, combining the strengths
-of MEANT 2.0, XMEANT, YiSi-1/2, WOLVESAAR, and SimAlign behind one clean
-Python API on top of modern multilingual embeddings.
+Unified semantic machine-translation evaluation. Reference-free or
+reference-based, word-alignment + embedding by default, frame-based
+MEANT 2.0 on opt-in — all behind a single `.score()` call.
 
 Quickstart
 ----------
 >>> from ryokai import Ryokai
->>> r = Ryokai(lang="en")
->>> r.score(
-...     reference="The cat sat on the mat.",
-...     hypothesis="A cat is sitting on the mat.",
-... )
-Score(precision=..., recall=..., f1=..., ...)
-
-Variants
---------
-- standard MEANT (frame-based, this default)
-- YiSi-1 / WOLVESAAR no-SRL mode: ``Ryokai(lang=..., use_srl=False)``
-- XMEANT / YiSi-2 reference-free mode: ``r.score_xlingual(...)``
-- SimAlign-style contextual word alignment: ``aligner="argmax" | "itermax" | "mai" | "hungarian"``
+>>> scorer = Ryokai()
+>>>
+>>> # Reference-free (most common; XMEANT / YiSi-2 / Doc-embedding adequacy)
+>>> scorer.score(source=src, hypothesis=hyp,
+...              source_lang="en", target_lang="ja")
+>>>
+>>> # Reference-based, word alignment + embeddings
+>>> # (Doc-embedding adequacy / WOLVESAAR / YiSi-1 / SimAlign)
+>>> scorer.score(reference=ref, hypothesis=hyp, target_lang="ja")
+>>>
+>>> # Frame-based MEANT 2.0 — opt in with srl=True
+>>> scorer.score(reference=ref, hypothesis=hyp, target_lang="ja", srl=True)
+>>>
+>>> # Frame-based reference-free (XMEANT proper)
+>>> scorer.score(source=src, hypothesis=hyp,
+...              source_lang="en", target_lang="ja", srl=True)
 """
 from __future__ import annotations
 
@@ -35,38 +38,45 @@ __version__ = "0.1.0"
 
 
 class Ryokai:
-    """Top-level MT-eval API.
+    """Unified MT-eval scorer.
 
-    One class drives all scoring modes; what mode you get depends on the
-    constructor flags and which ``score*`` method you call:
+    Construct once with the backend / alignment configuration you want;
+    call ``.score(...)`` per-pair. The mode is chosen by which arguments
+    you pass:
 
-    +-------------------------------+-----------------------------------------+
-    | Call                          | Mode                                    |
-    +===============================+=========================================+
-    | ``Ryokai(lang).score(r, h)``  | Full MEANT 2.0 — semantic frames        |
-    | ``Ryokai(lang, use_srl=False) | YiSi-1 / WOLVESAAR — no SRL, word       |
-    |   .score(r, h)``              | alignment + embedding F-score           |
-    | ``.score_xlingual(s, h, sl)`` | XMEANT / YiSi-2 — reference-free        |
-    +-------------------------------+-----------------------------------------+
+    +------------------------+--------------+--------------------------------------------+
+    | source / reference     | srl          | Mode                                       |
+    +========================+==============+============================================+
+    | ``source=``            | False (def.) | Reference-free, word alignment + embedding |
+    |                        |              | (XMEANT-lite / YiSi-2 / Doc-embedding adq) |
+    +------------------------+--------------+--------------------------------------------+
+    | ``reference=``         | False (def.) | Reference-based, word alignment + embedding|
+    |                        |              | (WOLVESAAR / YiSi-1 / SimAlign style)      |
+    +------------------------+--------------+--------------------------------------------+
+    | ``source=``            | True         | Reference-free, frame-based (XMEANT)       |
+    +------------------------+--------------+--------------------------------------------+
+    | ``reference=``         | True         | Reference-based, frame-based (MEANT 2.0)   |
+    +------------------------+--------------+--------------------------------------------+
+
+    Constructor parameters configure the *how* (which models, which
+    aligner, weights, etc.); per-call parameters configure the *what*
+    (which sentences, which languages, ref- vs source-based, with or
+    without SRL).
 
     Parameters
     ----------
-    lang : str
-        Two-letter language code of the hypothesis (one of `SUPPORTED_LANGS`).
-    use_srl : bool
-        If True (default), run the full frame-based MEANT pipeline. If
-        False, use the YiSi-1 / WOLVESAAR no-SRL fallback (word alignment
-        + embedding F-score).
     srl_backend : SRLBackend | None
-        SRL backend used when `use_srl=True`. Defaults to
-        `HFPOSHeuristicSRLBackend` — a multilingual XLM-R UDPOS heuristic
-        covering all 13 supported languages with one model.
+        SRL backend used whenever a `.score(..., srl=True)` call is made.
+        Defaults to `HFPOSHeuristicSRLBackend` — a multilingual XLM-R
+        UDPOS heuristic covering all 13 supported languages with one
+        model.
     sim_backend : EmbeddingSimBackend | None
         Sentence / argument similarity backend. Defaults to multilingual
         MiniLM. Swap to any preset (``"qwen3-0.6b"``, ``"jina-v3"``,
         ``"nemotron-8b"``…) or any HF model id.
     weights : dict[str, float] | None
-        Per-role weights for MEANT F-score. Defaults to `DEFAULT_WEIGHTS`.
+        Per-role weights for frame-based F-score. Defaults to
+        `DEFAULT_WEIGHTS`.
     label_config : LabelConfig | None
         SRL label aliasing. Defaults to bundled `data/labelconfig.yaml`.
     content_only : bool
@@ -87,8 +97,6 @@ class Ryokai:
 
     def __init__(
         self,
-        lang: str,
-        use_srl: bool = True,
         srl_backend: SRLBackend | None = None,
         sim_backend: EmbeddingSimBackend | None = None,
         weights: dict[str, float] | None = None,
@@ -99,14 +107,7 @@ class Ryokai:
         threshold: float = 0.5,
         exact_match_shortcut: bool = True,
     ) -> None:
-        if lang not in SUPPORTED_LANGS:
-            raise ValueError(
-                f"Language {lang!r} not supported. "
-                f"Supported: {sorted(SUPPORTED_LANGS)}"
-            )
-        self.lang = lang
-        self.use_srl = use_srl
-        self.srl = srl_backend or (HFPOSHeuristicSRLBackend() if use_srl else None)
+        self._srl_backend = srl_backend
         self.sim = sim_backend or EmbeddingSimBackend()
         self.weights = weights or DEFAULT_WEIGHTS
         self.label_config = label_config or LabelConfig()
@@ -116,83 +117,145 @@ class Ryokai:
         self.threshold = threshold
         self.exact_match_shortcut = exact_match_shortcut
 
-    def parse(self, sentence: str, lang: str | None = None) -> SRLGraph:
-        """Run SRL on one sentence. `lang` defaults to `self.lang`."""
-        if self.srl is None:
-            return SRLGraph(sentence=sentence)
-        return self.srl.parse(sentence, lang or self.lang)
+    @property
+    def srl(self) -> SRLBackend:
+        """Lazily instantiate the default SRL backend so users who never
+        call with ``srl=True`` never pay for the SRL model download."""
+        if self._srl_backend is None:
+            self._srl_backend = HFPOSHeuristicSRLBackend()
+        return self._srl_backend
 
-    def score(self, reference: str, hypothesis: str) -> Score:
-        """Score a single ref/hyp MT pair. Higher = more adequate."""
-        if not self.use_srl:
-            return score_nosrl(
-                reference,
-                hypothesis,
-                self.sim,
-                lang=self.lang,
-                content_only=self.content_only,
-                aggregation=self.aggregation,
-                aligner=self.aligner,
-                threshold=self.threshold,
-                exact_match_shortcut=self.exact_match_shortcut,
+    @staticmethod
+    def _check_lang(name: str, value: str | None) -> None:
+        if value is None:
+            return
+        if value not in SUPPORTED_LANGS:
+            raise ValueError(
+                f"{name}={value!r} not supported. "
+                f"Supported: {sorted(SUPPORTED_LANGS)}"
             )
-        ref = self.parse(reference)
-        hyp = self.parse(hypothesis)
-        return score_pair(ref, hyp, self.sim, self.weights, self.label_config)
+
+    def score(
+        self,
+        *,
+        hypothesis: str,
+        target_lang: str,
+        source: str | None = None,
+        source_lang: str | None = None,
+        reference: str | None = None,
+        srl: bool = False,
+    ) -> Score:
+        """Score one MT pair. See class docstring for the dispatch table.
+
+        Exactly one of ``source=`` or ``reference=`` must be given.
+        Higher returned ``f1`` = more adequate.
+        """
+        if (source is None) == (reference is None):
+            raise ValueError(
+                "pass exactly one of source= (reference-free) or "
+                "reference= (reference-based)"
+            )
+        self._check_lang("target_lang", target_lang)
+        self._check_lang("source_lang", source_lang)
+
+        if srl:
+            return self._score_with_srl(
+                hypothesis=hypothesis,
+                target_lang=target_lang,
+                source=source,
+                source_lang=source_lang,
+                reference=reference,
+            )
+        return self._score_nosrl(
+            hypothesis=hypothesis,
+            target_lang=target_lang,
+            source=source,
+            source_lang=source_lang,
+            reference=reference,
+        )
+
+    def _score_nosrl(
+        self,
+        *,
+        hypothesis: str,
+        target_lang: str,
+        source: str | None,
+        source_lang: str | None,
+        reference: str | None,
+    ) -> Score:
+        # the "other side" of the comparison is either source or reference
+        other = source if source is not None else reference
+        other_lang = source_lang if source is not None else target_lang
+        return score_nosrl(
+            other,
+            hypothesis,
+            self.sim,
+            lang=other_lang or target_lang,
+            content_only=self.content_only,
+            aggregation=self.aggregation,
+            aligner=self.aligner,
+            threshold=self.threshold,
+            exact_match_shortcut=self.exact_match_shortcut,
+        )
+
+    def _score_with_srl(
+        self,
+        *,
+        hypothesis: str,
+        target_lang: str,
+        source: str | None,
+        source_lang: str | None,
+        reference: str | None,
+    ) -> Score:
+        hyp_graph = self.srl.parse(hypothesis, target_lang)
+        if source is not None:
+            ref_graph = self.srl.parse(source, source_lang or target_lang)
+        else:
+            ref_graph = self.srl.parse(reference, target_lang)
+        return score_pair(
+            ref_graph, hyp_graph, self.sim, self.weights, self.label_config,
+        )
 
     def score_corpus(
         self,
-        references: list[str],
+        *,
         hypotheses: list[str],
+        target_lang: str,
+        sources: list[str] | None = None,
+        source_lang: str | None = None,
+        references: list[str] | None = None,
+        srl: bool = False,
     ) -> list[Score]:
-        """Score a parallel corpus — one Score per (ref, hyp) pair."""
-        if len(references) != len(hypotheses):
-            raise ValueError(
-                f"len(references)={len(references)} != len(hypotheses)={len(hypotheses)}"
-            )
-        return [self.score(r, h) for r, h in zip(references, hypotheses)]
+        """Score a parallel corpus — one Score per pair.
 
-    def score_xlingual(
-        self,
-        source: str,
-        hypothesis: str,
-        source_lang: str,
-    ) -> Score:
-        """XMEANT / YiSi-2 style **reference-free** scoring.
-
-        Scores `hypothesis` (in `self.lang`) directly against `source`
-        (in `source_lang`) using cross-lingual semantic-frame agreement.
-        No reference translation needed — works because both SRL and
-        similarity backends are multilingual.
-
-        Cite: Lo et al. 2014 (XMEANT, P14-2124) and Lo 2019 (YiSi, WMT19).
+        Same dispatch rules as `.score()`: pass either `sources=` or
+        `references=`, not both.
         """
-        if source_lang not in SUPPORTED_LANGS:
+        if (sources is None) == (references is None):
             raise ValueError(
-                f"source_lang {source_lang!r} not supported. "
-                f"Supported: {sorted(SUPPORTED_LANGS)}"
+                "pass exactly one of sources= or references="
             )
-        if not self.use_srl:
-            return score_nosrl(
-                source,
-                hypothesis,
-                self.sim,
-                lang=source_lang,
-                content_only=self.content_only,
-                aggregation=self.aggregation,
-                aligner=self.aligner,
-                threshold=self.threshold,
-                exact_match_shortcut=self.exact_match_shortcut,
+        n = len(hypotheses)
+        others = sources if sources is not None else references
+        if len(others) != n:
+            raise ValueError(
+                f"length mismatch: hypotheses={n}, "
+                f"{'sources' if sources is not None else 'references'}={len(others)}"
             )
-        src_graph = self.parse(source, lang=source_lang)
-        hyp_graph = self.parse(hypothesis)
-        return score_pair(
-            src_graph,
-            hyp_graph,
-            self.sim,
-            self.weights,
-            self.label_config,
-        )
+        out: list[Score] = []
+        for i in range(n):
+            kwargs = dict(
+                hypothesis=hypotheses[i],
+                target_lang=target_lang,
+                source_lang=source_lang,
+                srl=srl,
+            )
+            if sources is not None:
+                kwargs["source"] = sources[i]
+            else:
+                kwargs["reference"] = references[i]
+            out.append(self.score(**kwargs))
+        return out
 
 
 # Backwards-compatible alias — most MT-eval literature calls this MEANT.

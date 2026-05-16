@@ -1,12 +1,12 @@
-"""End-to-end tests for all 13 MEANT-supported languages.
+"""End-to-end tests for all 13 supported languages.
 
-Marked `slow` because each language triggers HF model downloads on first
-run (one shared multilingual XLM-R POS model + one shared multilingual
-embedding model). Run with: `pytest -m slow`.
+Marked `slow` because the first run downloads HF models (one shared
+multilingual XLM-R POS model + one shared multilingual embedding model).
+Run with: `pytest -m slow`.
 """
 import pytest
 
-from ryokai import MEANT, SUPPORTED_LANGS
+from ryokai import Ryokai, SUPPORTED_LANGS
 
 
 # (lang, reference, near-paraphrase, unrelated)
@@ -85,58 +85,85 @@ def test_supported_langs_match_test_cases():
 
 @pytest.mark.slow
 @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGS))
-def test_meant_self_score_is_one(lang):
-    """Scoring a sentence against itself should be ~1.0."""
+def test_nosrl_self_score_is_one(lang):
     ref, _, _ = CASES[lang]
-    meant = MEANT(lang=lang)
-    score = meant.score(ref, ref)
-    assert score.f1 > 0.95, f"self-score for {lang} = {score.f1:.3f}"
+    scorer = Ryokai()
+    s = scorer.score(reference=ref, hypothesis=ref, target_lang=lang)
+    assert s.f1 > 0.99
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGS))
-def test_meant_paraphrase_beats_unrelated(lang):
-    """A near-paraphrase should outscore an unrelated sentence."""
-    ref, near, far = CASES[lang]
-    meant = MEANT(lang=lang)
-    s_near = meant.score(ref, near).f1
-    s_far = meant.score(ref, far).f1
-    assert s_near > s_far, (
-        f"{lang}: paraphrase {s_near:.3f} did not beat unrelated {s_far:.3f}"
-    )
+def test_srl_self_score_is_one(lang):
+    ref, _, _ = CASES[lang]
+    scorer = Ryokai()
+    s = scorer.score(reference=ref, hypothesis=ref, target_lang=lang, srl=True)
+    assert s.f1 > 0.95
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGS))
-def test_meant_score_in_unit_interval(lang):
-    """All scores must be in [0, 1]."""
+def test_paraphrase_beats_unrelated_nosrl(lang):
     ref, near, far = CASES[lang]
-    meant = MEANT(lang=lang)
+    scorer = Ryokai()
+    s_near = scorer.score(reference=ref, hypothesis=near, target_lang=lang).f1
+    s_far = scorer.score(reference=ref, hypothesis=far, target_lang=lang).f1
+    assert s_near > s_far
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGS))
+def test_paraphrase_beats_unrelated_srl(lang):
+    ref, near, far = CASES[lang]
+    scorer = Ryokai()
+    s_near = scorer.score(reference=ref, hypothesis=near, target_lang=lang, srl=True).f1
+    s_far = scorer.score(reference=ref, hypothesis=far, target_lang=lang, srl=True).f1
+    assert s_near > s_far
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGS))
+def test_score_in_unit_interval(lang):
+    ref, near, far = CASES[lang]
+    scorer = Ryokai()
     for hyp in (ref, near, far):
-        s = meant.score(ref, hyp)
+        s = scorer.score(reference=ref, hypothesis=hyp, target_lang=lang)
         assert 0.0 <= s.f1 <= 1.0
         assert 0.0 <= s.precision <= 1.0
         assert 0.0 <= s.recall <= 1.0
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGS))
-def test_nosrl_self_score_is_one(lang):
-    """The YiSi-1-style no-SRL fallback also works for all 13 langs."""
-    ref, _, _ = CASES[lang]
-    meant = MEANT(lang=lang, use_srl=False)
-    score = meant.score(ref, ref)
-    assert score.f1 > 0.99
-
-
-@pytest.mark.slow
-def test_xmeant_reference_free_cross_lingual():
-    """XMEANT mode: score Chinese MT against English source (or vice versa)."""
-    meant = MEANT(lang="zh")  # target = zh
-    # source = English sentence; hypothesis = its Chinese translation
+def test_reference_free_cross_lingual_nosrl():
+    """Reference-free path: score Chinese MT against English source."""
+    scorer = Ryokai()
     src = "The cat sat on the mat yesterday."
     good = "猫昨天坐在垫子上。"
     bad = "明天火箭将飞向火星。"
-    s_good = meant.score_xlingual(src, good, source_lang="en").f1
-    s_bad = meant.score_xlingual(src, bad, source_lang="en").f1
+    s_good = scorer.score(
+        source=src, hypothesis=good,
+        source_lang="en", target_lang="zh",
+    ).f1
+    s_bad = scorer.score(
+        source=src, hypothesis=bad,
+        source_lang="en", target_lang="zh",
+    ).f1
+    assert s_good > s_bad
+
+
+@pytest.mark.slow
+def test_reference_free_cross_lingual_srl():
+    """XMEANT proper: source-vs-hyp frame-based."""
+    scorer = Ryokai()
+    src = "The cat sat on the mat yesterday."
+    good = "猫昨天坐在垫子上。"
+    bad = "明天火箭将飞向火星。"
+    s_good = scorer.score(
+        source=src, hypothesis=good,
+        source_lang="en", target_lang="zh", srl=True,
+    ).f1
+    s_bad = scorer.score(
+        source=src, hypothesis=bad,
+        source_lang="en", target_lang="zh", srl=True,
+    ).f1
     assert s_good > s_bad

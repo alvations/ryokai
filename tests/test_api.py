@@ -1,7 +1,7 @@
-"""Lightweight API surface tests."""
+"""Lightweight API surface tests for the keyword-dispatch interface."""
 import pytest
 
-from ryokai import MEANT, SUPPORTED_LANGS
+from ryokai import Ryokai, SUPPORTED_LANGS
 
 
 def test_supported_langs_is_13_languages():
@@ -12,18 +12,52 @@ def test_supported_langs_is_13_languages():
     }
 
 
-def test_meant_init_validates_lang():
+def test_score_requires_source_xor_reference():
+    scorer = Ryokai()
     with pytest.raises(ValueError):
-        MEANT(lang="qq", use_srl=False)
+        scorer.score(hypothesis="hi", target_lang="en")
+    with pytest.raises(ValueError):
+        scorer.score(
+            hypothesis="hi", target_lang="en",
+            source="hola", reference="hi",
+        )
 
 
-def test_meant_xlingual_validates_source_lang():
-    m = MEANT(lang="en", use_srl=False)
+def test_score_validates_target_lang():
+    scorer = Ryokai()
     with pytest.raises(ValueError):
-        m.score_xlingual("hola", "hello", source_lang="zz")
+        scorer.score(reference="x", hypothesis="y", target_lang="qq")
+
+
+def test_score_validates_source_lang_when_given():
+    scorer = Ryokai()
+    with pytest.raises(ValueError):
+        scorer.score(
+            source="x", hypothesis="y",
+            target_lang="en", source_lang="zz",
+        )
+
+
+def test_score_corpus_requires_sources_xor_references():
+    scorer = Ryokai()
+    with pytest.raises(ValueError):
+        scorer.score_corpus(hypotheses=["a"], target_lang="en")
+    with pytest.raises(ValueError):
+        scorer.score_corpus(
+            hypotheses=["a"], target_lang="en",
+            sources=["b"], references=["c"],
+        )
 
 
 def test_score_corpus_length_mismatch_raises():
-    m = MEANT(lang="en", use_srl=False)
+    scorer = Ryokai()
     with pytest.raises(ValueError):
-        m.score_corpus(["a"], ["b", "c"])
+        scorer.score_corpus(
+            hypotheses=["a"], target_lang="en",
+            references=["b", "c"],
+        )
+
+
+def test_meant_alias_is_ryokai():
+    from ryokai import MEANT
+    assert MEANT is Ryokai
